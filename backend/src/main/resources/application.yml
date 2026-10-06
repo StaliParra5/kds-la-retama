@@ -1,0 +1,54 @@
+server:
+  port: ${SERVER_PORT:8080}
+  compression:
+    enabled: true
+    mime-types: application/json,text/html,text/xml,text/plain,text/css,application/javascript
+
+spring:
+  application:
+    name: kds-backend
+
+  datasource:
+    # Soporta tanto localhost:5433 (desarrollo local en host) como db:5432 (dentro de red Docker)
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/kds_db}
+    username: ${SPRING_DATASOURCE_USERNAME:kds_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:kds_secret_pass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: 20000
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      max-lifetime: 1200000
+
+  jpa:
+    # La integridad del esquema es administrada estrictamente por Flyway
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+
+# Configuración de Seguridad y Criptografía
+kds:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:kds_secret_super_secure_key_for_jwt_tokens_2026_isil_la_retama}
+      expiration-ms: ${JWT_EXPIRATION_MS:28800000} # 8 horas de turno operativo
+  cors:
+    allowed-origins: ${KDS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080}
+
+# Documentación OpenAPI Swagger
+springdoc:
+  api-docs:
+    path: /api/v1/docs
+  swagger-ui:
+    path: /swagger-ui.html

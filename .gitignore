@@ -1,0 +1,21 @@
+# Archivos del sistema operativo y entornos locales
+.directory
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# Build artifacts de Backend (Java / Maven)
+backend/target/
+backend/*.jar
+backend/.mvn/wrapper/maven-wrapper.jar
+
+# Build artifacts y dependencias de Frontend (Node / Vite)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+
+# Volúmenes y datos persistentes locales de base de datos
+pgdata/
+*.sql.bak

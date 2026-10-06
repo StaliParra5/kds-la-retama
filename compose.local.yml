@@ -1,0 +1,56 @@
+# Docker Compose para entorno local del Sistema KDS (La Retama Restaurante)
+# Estrategia de diseño:
+# - Servicio 'db' siempre disponible en puerto 5432 con healthcheck nativo de Postgres.
+# - Servicio 'backend' opcional mediante profile 'full' para ejecutar el stack completo en contenedor,
+#   o permitir desarrollo híbrido conectando Spring Boot/Maven directamente al Postgres local.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: kds-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kds_db
+      POSTGRES_USER: kds_user
+      POSTGRES_PASSWORD: kds_secret_pass
+    ports:
+      # Mapeo a 5433 en el host para evitar colisión con el PostgreSQL nativo en 5432,
+      # manteniendo 5432 dentro de la red interna de contenedores
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - kds_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kds_user -d kds_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kds-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kds-backend
+    restart: unless-stopped
+    profiles: ["full", "backend"]
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/kds_db
+      SPRING_DATASOURCE_USERNAME: kds_user
+      SPRING_DATASOURCE_PASSWORD: kds_secret_pass
+      JWT_SECRET: kds_secret_super_secure_key_for_jwt_tokens_2026_isil_la_retama
+      SERVER_PORT: 8080
+    networks:
+      - kds-network
+
+volumes:
+  kds_pgdata:
+    driver: local
+
+networks:
+  kds-network:
+    driver: bridge
