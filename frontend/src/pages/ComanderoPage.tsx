@@ -403,9 +403,12 @@ export const ComanderoPage: React.FC = () => {
         </section>
 
         {/* PANEL DERECHO: Inspector de Comanda Activa (35%) */}
-        <aside className="lg:col-span-4 bg-surface-container-lowest border border-surface-container-high rounded-2xl shadow-sm flex flex-col h-full min-h-[580px] overflow-hidden">
+        {/* Layout táctil autoregulable (self-start + max-h + flex-shrink-0): */}
+        {/* Evita el estiramiento forzado de CSS Grid al alto del catálogo (40+ platos), */}
+        {/* adaptando la altura orgánicamente al contenido y fijando el total/envío en el viewport. */}
+        <aside className="lg:col-span-4 bg-surface-container-lowest border border-surface-container-high rounded-2xl shadow-sm flex flex-col self-start lg:sticky lg:top-20 max-h-[calc(100vh-180px)] overflow-hidden transition-all">
           {/* Cabecera del Ticket */}
-          <div className="bg-surface-container-low p-4 border-b border-surface-container-high flex items-center justify-between">
+          <div className="bg-surface-container-low p-3.5 border-b border-surface-container-high flex items-center justify-between flex-shrink-0">
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-bold text-on-surface-variant uppercase">
@@ -434,8 +437,8 @@ export const ComanderoPage: React.FC = () => {
             )}
           </div>
 
-          {/* Lista de Ítems del Ticket */}
-          <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3">
+          {/* Lista de Ítems del Ticket: contenedor flex con scroll interno autónomo */}
+          <div className="flex-1 min-h-0 p-3.5 overflow-y-auto flex flex-col gap-2.5">
             {itemsComanda.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-on-surface-variant">
                 <span className="material-symbols-outlined text-[42px] text-outline/50 mb-2">
@@ -513,7 +516,8 @@ export const ComanderoPage: React.FC = () => {
           </div>
 
           {/* Pie de Comanda: Observaciones y Botón Enviar */}
-          <div className="p-4 bg-surface-container-low border-t border-surface-container-high flex flex-col gap-3">
+          {/* flex-shrink-0 garantiza que el total y el botón de acción nunca sean colapsados por la lista de ítems */}
+          <div className="p-3.5 bg-surface-container-low border-t border-surface-container-high flex flex-col gap-2.5 flex-shrink-0">
             {/* Observaciones Generales */}
             <input
               type="text"

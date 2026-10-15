@@ -49,6 +49,15 @@ public class UsuarioService {
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con ID: " + usuarioId));
 
+        // HU002 Escenario 5: Protección estricta del último administrador activo del sistema
+        // Previene dejar el KDS sin capacidad de gestión administrativa o de configuración crítica.
+        if ("ADMIN".equalsIgnoreCase(usuario.getRol().getCodigo()) && !"ADMIN".equalsIgnoreCase(rolCodigo)) {
+            List<Usuario> adminsActivos = usuarioRepository.findByRolCodigoAndActivoTrue("ADMIN");
+            if (adminsActivos.size() <= 1 && adminsActivos.stream().anyMatch(a -> a.getId().equals(usuarioId))) {
+                throw new IllegalArgumentException("No se puede cambiar el rol al único administrador activo del sistema.");
+            }
+        }
+
         Rol nuevoRol = rolRepository.findByCodigo(rolCodigo)
                 .orElseThrow(() -> new IllegalArgumentException("Rol no válido en el sistema: " + rolCodigo));
 

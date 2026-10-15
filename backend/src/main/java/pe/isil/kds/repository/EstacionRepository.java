@@ -9,5 +9,7 @@ import java.util.Optional;
 @Repository
 public interface EstacionRepository extends JpaRepository<Estacion, Long> {
     Optional<Estacion> findByCodigo(String codigo);
+    // HU004 Escenario 3: Verificación de unicidad por nombre para evitar estaciones ambiguas en cocina
+    Optional<Estacion> findByNombreIgnoreCase(String nombre);
     List<Estacion> findByActivoTrue();
 }
