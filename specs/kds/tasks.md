@@ -174,3 +174,54 @@
   - Validar empaquetado final: Spring Boot sirviendo el bundle compilado de React en el puerto 8080.
   - Demostración de funcionamiento desconectado de internet (simulación LAN pura).
   - Criterio de Aceptación: Cumplimiento íntegro de la Definition of Done del Sprint 1 ante el Product Owner.
+
+---
+
+## Fase 4: Modernización y Reemplazo UI/UX con Google Stitch (La Retama KDS Prototype)
+
+- [x] **TASK-040 [FE] [UI] Setup de Tailwind CSS con Tokens de Stitch y Desinstalación de MUI**
+  - Desinstalar paquetes de MUI (`@mui/material`, `@emotion/*`, etc.) con `pnpm`.
+  - Configurar `tailwind.config.js` con la paleta de colores semánticos (`surface`, `surface-container-*`, `primary`, `secondary`, `error`), espaciados `space-*`, radios `rounded-*`, y tipografías `Plus Jakarta Sans` e `Inter`.
+  - Importar fuentes oficiales y `Material Symbols Outlined` en `frontend/index.html`.
+  - Configurar directivas `@tailwind` y utilidades en `frontend/src/index.css`.
+  - Criterio de Aceptación: `pnpm build` compila con Tailwind CSS sin dependencias de MUI.
+
+- [x] **TASK-041 [FE] [UI] Reemplazo de Pantalla de Login (Stitch Screen 01)**
+  - Implementar Bento card con efectos sutiles de fondo (glows de ambiente).
+  - Pestaña de Ingreso Rápido con PIN táctil (teclado de 12 botones grandes, indicador de dots y feedback táctil).
+  - Pestaña de Acceso Administrativo (Usuario y Contraseña con iconos y validación).
+  - Indicador de estado de terminal KDS con pulso verde y reloj en vivo.
+  - Conexión con endpoints `/api/v1/auth/login-pin` y `/api/v1/auth/login-admin`.
+  - Criterio de Aceptación: Login rápido con PIN 1234 y login admin con credenciales redirigen correctamente según rol.
+
+- [x] **TASK-042 [FE] [UI] Barra Superior KDS y Sistema de Notificaciones Toast**
+  - Implementar componente `TopAppBar` idéntico a Stitch: Branding "La Retama KDS", estado online, reloj en tiempo real, badge del operador con rol y pestañas contextuales (`/comandero`, `/admin/catalogo`, `/admin`).
+  - Implementar `ToastContainer` y `ToastContext` para alertas flotantes no intrusivas en la esquina superior derecha con autocierre.
+  - Criterio de Aceptación: Notificaciones visuales inmediatas y navegación fluida entre módulos según rol.
+
+- [x] **TASK-043 [FE] [UI] Reemplazo de Comandero y Toma de Pedidos (Stitch Screen 02)**
+  - Sub-header con barra de búsqueda rápida (< 500 ms) y selector de Zonas (Salón Principal, Terraza, Barra) y Canales.
+  - Cinta de indicadores en vivo (Mesas Activas, SLA Promedio, Comandas en Preparación).
+  - Vista dividida (Split 65% / 35%):
+    - Izquierda: Grilla interactiva de mesas con indicadores de estado y selector de platos con fotos, categoría, precio y tiempo.
+    - Derecha: Comanda activa con código correlativo único diario sugerido, contador `+`/`-`, modificadores y botón "ENVIAR A COCINA".
+  - Criterio de Aceptación: Apertura y envío de comanda persistido exitosamente en PostgreSQL mediante `/api/v1/pedidos`.
+
+- [x] **TASK-044 [FE] [UI] Reemplazo de Catálogo y Rutas de Menú (Stitch Screen 08)**
+  - Métricas de catálogo en cabecera: Total de platos, tiempo promedio y cobertura de estaciones.
+  - Filtros rápidos por Estación de Cocina (`Parrilla`, `Calientes`, `Fríos`, `Bebidas`) y Categoría.
+  - Tabla de datos con elevación Level 1 (Código, Nombre, Categoría, Estación destino con badge, Tiempo SLA, Precio y Estado).
+  - Modal / Slide-over drawer para crear/editar plato validando estación obligatoria y tiempoEstándar > 0 (HU003 & HU023).
+  - Criterio de Aceptación: Creación y edición de platos conectada con `/api/v1/platos` y `/api/v1/estaciones`.
+
+- [x] **TASK-045 [FE] [UI] Reemplazo de Configuración de Estaciones, Mesas y Canales (HU004, HU005 & HU037)**
+  - Gestión interactiva de Canales de Venta con actualización en vivo de SLA en minutos (HU037).
+  - Matriz de Estaciones de Cocina activas (HU004) con modal para crear/editar estaciones y vincular PC.
+  - Gestión de Zonas y Mesas de Salón (HU005) con validación de unicidad de mesa por zona.
+  - Criterio de Aceptación: Todas las entidades administrativas actualizables y persistidas en base de datos.
+
+- [x] **TASK-046 [FULL] [QA] Validación E-2-E, Verificación Biome y Build Maven Híbrido**
+  - Ejecución de `pnpm lint` y `pnpm build` sin advertencias ni errores de tipos.
+  - Verificación del empaquetado multi-etapa con Maven (`./mvnw clean package -DskipTests=false`).
+  - Validación en vivo en navegador de todas las pantallas reemplazadas.
+

@@ -24,7 +24,8 @@
         "useImportType": "off"
       },
       "suspicious": {
-        "noExplicitAny": "off"
+        "noExplicitAny": "off",
+        "noUnknownAtRules": "off"
       },
       "correctness": {
         "noUnusedVariables": "warn",

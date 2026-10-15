@@ -1,21 +1,8 @@
-// Pantalla de Autenticación Dual (HU001)
-// Implementa Pestaña 1: Ingreso Rápido con PIN táctil para Cocina y Sala (Escenario 1)
-// e Implementa Pestaña 2: Acceso Administrativo con credenciales completas (Escenario 2).
-import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import CircularProgress from '@mui/material/CircularProgress';
-import Container from '@mui/material/Container';
-import IconButton from '@mui/material/IconButton';
-import InputAdornment from '@mui/material/InputAdornment';
-import Tab from '@mui/material/Tab';
-import Tabs from '@mui/material/Tabs';
-import TextField from '@mui/material/TextField';
-import Typography from '@mui/material/Typography';
-import { ArrowRight, Delete, Eye, EyeOff, KeyRound, Lock, User, Utensils } from 'lucide-react';
-import React, { useState } from 'react';
+// Pantalla de Autenticación Dual para La Retama KDS (HU001 & HU002)
+// Diseño exacto basado en Stitch (01 - Acceso y Login KDS / Culinary Operations Light):
+// - Pestaña 1: Ingreso Rápido con PIN de 4 dígitos para personal operativo (Sala/Cocina) con teclado táctil numérico de 12 teclas grandes.
+// - Pestaña 2: Acceso Administrativo con credenciales completas para configurar catálogo, estaciones y parámetros.
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LaRetamaWatermark } from '../components/common/LaRetamaWatermark';
 import { useAuth } from '../context/AuthContext';
@@ -24,19 +11,43 @@ export const LoginPage: React.FC = () => {
   const { loginAdmin, loginPin } = useAuth();
   const navigate = useNavigate();
 
-  const [tabIndex, setTabIndex] = useState<number>(0); // 0: PIN, 1: Admin
+  const [activeTab, setActiveTab] = useState<'pin' | 'admin'>('pin');
+  const [pin, setPin] = useState<string>('');
   const [username, setUsername] = useState<string>('admin');
   const [password, setPassword] = useState<string>('admin123');
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [pin, setPin] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [currentTime, setCurrentTime] = useState<string>('');
 
-  // Manejador del teclado numérico en pantalla para terminales táctiles (HU001)
+  // Reloj digital en vivo para cabecera táctil
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      setCurrentTime(
+        now.toLocaleTimeString('es-PE', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        }),
+      );
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Manejo del teclado numérico en pantalla para terminales táctiles (HU001)
   const handlePinDigit = (digit: string) => {
     if (pin.length < 4) {
-      setPin((prev) => prev + digit);
+      const nextPin = pin + digit;
+      setPin(nextPin);
       setErrorMsg(null);
+      // Auto-envío opcional al completar los 4 dígitos
+      if (nextPin.length === 4) {
+        submitPin(nextPin);
+      }
     }
   };
 
@@ -50,42 +61,44 @@ export const LoginPage: React.FC = () => {
     setErrorMsg(null);
   };
 
-  const handleAdminSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-    setIsSubmitting(true);
-    try {
-      await loginAdmin(username.trim(), password);
-      navigate('/admin/productos');
-    } catch (err: any) {
-      const msg =
-        err.response?.data?.mensaje || 'Credenciales incorrectas. Verifique usuario y contraseña.';
-      setErrorMsg(msg);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handlePinSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (pin.length !== 4) {
-      setErrorMsg('El PIN debe tener exactamente 4 dígitos.');
+  const submitPin = async (pinValue: string) => {
+    if (pinValue.length !== 4) {
+      setErrorMsg('El PIN debe contener exactamente 4 dígitos.');
       return;
     }
     setErrorMsg(null);
     setIsSubmitting(true);
     try {
-      const sesion = await loginPin(pin);
-      // Navegación contextual inteligente según el rol operativo asignado (HU001 & HU002)
-      if (sesion.rol === 'MOZO') {
-        navigate('/comandero');
-      } else if (sesion.rol === 'COCINERO' || sesion.rol === 'EXPEDIDOR') {
-        navigate('/admin/estaciones');
+      const sesion = await loginPin(pinValue);
+      // Enrutamiento basado en roles operativos (HU001 & HU002)
+      if (sesion.rol === 'ADMIN') {
+        navigate('/admin/platos');
       } else {
         navigate('/comandero');
       }
     } catch (err: any) {
-      const msg = err.response?.data?.mensaje || 'PIN incorrecto o no autorizado.';
+      const msg =
+        err.response?.data?.mensaje || 'PIN incorrecto o no autorizado para esta estación.';
+      setErrorMsg(msg);
+      setPin('');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAdminSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim() || !password) {
+      setErrorMsg('Ingrese usuario y contraseña.');
+      return;
+    }
+    setErrorMsg(null);
+    setIsSubmitting(true);
+    try {
+      await loginAdmin(username.trim(), password);
+      navigate('/admin/platos');
+    } catch (err: any) {
+      const msg = err.response?.data?.mensaje || 'Credenciales administrativas inválidas.';
       setErrorMsg(msg);
     } finally {
       setIsSubmitting(false);
@@ -93,357 +106,273 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        backgroundColor: '#f8fafc',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        position: 'relative',
-      }}
-    >
-      {/* Barra Superior Simplificada */}
-      <Box
-        sx={{
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #e2e8f0',
-          px: { xs: 2, sm: 4 },
-          py: 1.5,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Box
-            sx={{
-              width: 36,
-              height: 36,
-              backgroundColor: '#0f172a',
-              color: '#ffffff',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Utensils size={18} />
-          </Box>
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
-              KDS
-            </Typography>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
-              Sistema de Control
-            </Typography>
-          </Box>
-        </Box>
+    <div className="relative min-h-screen bg-background font-sans text-on-surface flex items-center justify-center p-4 overflow-hidden select-none">
+      {/* Resplandores decorativos de ambiente (Design System Stitch) */}
+      <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[680px] h-[320px] bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/3 -right-20 w-80 h-80 bg-secondary/5 rounded-full blur-2xl pointer-events-none" />
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography
-            variant="caption"
-            sx={{ color: '#64748b', display: { xs: 'none', sm: 'inline' } }}
-          >
-            Módulo de Autenticación
-          </Typography>
-          <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#10b981' }} />
-        </Box>
-      </Box>
+      <main className="w-full max-w-md flex flex-col items-center relative z-10">
+        {/* Fila superior de contexto y estado de terminal */}
+        <div className="w-full flex items-center justify-between mb-4 px-1">
+          <div className="flex items-center gap-1.5 bg-surface-container-high/80 backdrop-blur-sm px-3 py-1 rounded-full border border-surface-container-highest">
+            <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+              Terminal KDS-01 • En línea
+            </span>
+          </div>
+          <div className="flex items-center gap-1 text-on-surface-variant text-xs font-mono">
+            <span className="material-symbols-outlined text-[16px]">schedule</span>
+            <span>{currentTime || '00:00:00'}</span>
+          </div>
+        </div>
 
-      {/* Tarjeta Central de Inicio de Sesión */}
-      <Container maxWidth="xs" sx={{ py: 6, flex: 1, display: 'flex', alignItems: 'center' }}>
-        <Card
-          sx={{
-            width: '100%',
-            borderRadius: '16px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.03)',
-            backgroundColor: '#ffffff',
-          }}
-        >
-          <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
-            {/* Encabezado de la Tarjeta */}
-            <Box sx={{ textAlign: 'center', mb: 3 }}>
-              <Box
-                sx={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 48,
-                  height: 48,
-                  backgroundColor: '#fef3c7',
-                  color: '#d97706',
-                  borderRadius: '12px',
-                  mb: 1.5,
-                  border: '1px solid #fde68a',
-                }}
-              >
-                <KeyRound size={24} />
-              </Box>
-              <Typography
-                variant="h2"
-                sx={{ fontWeight: 700, color: '#0f172a', fontSize: '1.25rem' }}
-              >
-                Acceso al Sistema
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#64748b', mt: 0.5 }}>
-                Seleccione el modo de ingreso según su puesto
-              </Typography>
-            </Box>
+        {/* Tarjeta Bento Central de Autenticación */}
+        <div className="w-full bg-surface-container-lowest rounded-2xl shadow-xl border border-surface-container-high/60 p-6 sm:p-8 flex flex-col relative overflow-hidden backdrop-blur-sm">
+          {/* Cabecera de Marca La Retama */}
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center text-on-primary shadow-md mb-3">
+              <span className="material-symbols-outlined text-[32px]">restaurant</span>
+            </div>
+            <h1 className="font-headline font-extrabold text-2xl tracking-tight text-on-surface">
+              La Retama <span className="text-primary">KDS</span>
+            </h1>
+            <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mt-1">
+              Sistema de Cocina y Salón • Sprint 1
+            </p>
+          </div>
 
-            {/* Pestañas de Selección de Modo (PIN vs Admin) */}
-            <Tabs
-              value={tabIndex}
-              onChange={(_, val) => {
-                setTabIndex(val);
+          {/* Selector de Modo: Ingreso Rápido con PIN vs Acceso Administrativo (HU001) */}
+          <div className="grid grid-cols-2 gap-1 bg-surface-container-low p-1 rounded-xl mb-6 border border-surface-container-high">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('pin');
                 setErrorMsg(null);
               }}
-              variant="fullWidth"
-              sx={{
-                mb: 3,
-                backgroundColor: '#f1f5f9',
-                borderRadius: '8px',
-                p: 0.5,
-                '& .MuiTabs-indicator': { display: 'none' },
-                '& .MuiTab-root': {
-                  minHeight: 36,
-                  borderRadius: '6px',
-                  fontWeight: 600,
-                  fontSize: '0.8rem',
-                  textTransform: 'none',
-                  color: '#64748b',
-                  '&.Mui-selected': {
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-                  },
-                },
-              }}
+              className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'pin'
+                  ? 'bg-primary text-on-primary shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
             >
-              <Tab label="PIN de Estación" />
-              <Tab label="Administración" />
-            </Tabs>
+              <span className="material-symbols-outlined text-[18px]">dialpad</span>
+              <span>PIN Cocina / Sala</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('admin');
+                setErrorMsg(null);
+              }}
+              className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'admin'
+                  ? 'bg-primary text-on-primary shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span>
+              <span>Administración</span>
+            </button>
+          </div>
 
-            {/* Mensaje de Error */}
-            {errorMsg && (
-              <Alert severity="error" sx={{ mb: 2.5, borderRadius: '8px', fontSize: '0.8rem' }}>
-                {errorMsg}
-              </Alert>
-            )}
+          {/* Banner de Error Operativo */}
+          {errorMsg && (
+            <div className="flex items-start gap-2.5 bg-error-container text-on-error-container p-3 rounded-xl mb-5 border border-error/20 animate-shake">
+              <span className="material-symbols-outlined text-[20px] text-error shrink-0 mt-0.5">
+                error
+              </span>
+              <div className="flex-1 text-left">
+                <p className="text-xs font-bold text-error uppercase">Acceso Denegado</p>
+                <p className="text-xs mt-0.5 leading-snug">{errorMsg}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setErrorMsg(null)}
+                className="text-on-error-container opacity-60 hover:opacity-100 p-0.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            </div>
+          )}
 
-            {/* MODO 0: PIN Rápido con Teclado Numérico */}
-            {tabIndex === 0 && (
-              <Box>
-                {/* Visualizador de dígitos ingresados */}
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    gap: 1.5,
-                    mb: 3,
-                    py: 1.5,
-                    backgroundColor: '#f8fafc',
-                    borderRadius: '10px',
-                    border: '1px solid #e2e8f0',
-                  }}
-                >
-                  {[0, 1, 2, 3].map((idx) => (
-                    <Box
-                      key={idx}
-                      sx={{
-                        width: 14,
-                        height: 14,
-                        borderRadius: '50%',
-                        backgroundColor: pin.length > idx ? '#d97706' : '#cbd5e1',
-                        transition: 'all 0.15s ease',
-                      }}
+          {/* MODO 1: Teclado Numérico Táctil con PIN (HU001 Escenario 1) */}
+          {activeTab === 'pin' && (
+            <div className="flex flex-col items-center">
+              {/* Display de 4 Dots para el PIN */}
+              <div className="flex items-center justify-center gap-3 my-2 py-3 px-6 bg-surface-container-low rounded-xl border border-surface-container-high w-full">
+                {[0, 1, 2, 3].map((index) => {
+                  const hasDigit = index < pin.length;
+                  return (
+                    <div
+                      key={index}
+                      className={`w-4 h-4 rounded-full transition-all duration-200 ${
+                        hasDigit
+                          ? 'bg-primary scale-110 shadow-sm'
+                          : 'bg-surface-container-highest border border-outline-variant/50'
+                      }`}
                     />
-                  ))}
-                </Box>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] font-medium text-on-surface-variant mb-4">
+                Digite su PIN de 4 dígitos asignado (ej. 1234)
+              </p>
 
-                {/* Teclado Táctil 0-9 */}
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: 1.25,
-                    mb: 2.5,
-                  }}
-                >
-                  {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
-                    <Button
-                      key={digit}
-                      variant="outlined"
-                      onClick={() => handlePinDigit(digit)}
-                      sx={{
-                        height: 48,
-                        fontSize: '1.15rem',
-                        fontWeight: 700,
-                        color: '#0f172a',
-                        backgroundColor: '#f8fafc',
-                        borderColor: '#e2e8f0',
-                        '&:hover': {
-                          backgroundColor: '#f1f5f9',
-                          borderColor: '#cbd5e1',
-                        },
-                      }}
-                    >
-                      {digit}
-                    </Button>
-                  ))}
-                  <Button
-                    variant="outlined"
-                    onClick={handlePinClear}
-                    sx={{
-                      height: 48,
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      color: '#64748b',
-                      borderColor: '#e2e8f0',
-                    }}
+              {/* Grilla de Teclas Táctiles Grandes (Optimizadas para dedos con guantes o humedad) */}
+              <div className="grid grid-cols-3 gap-2 w-full max-w-xs mb-4">
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                  <button
+                    key={digit}
+                    type="button"
+                    onClick={() => handlePinDigit(digit)}
+                    disabled={isSubmitting}
+                    className="h-14 rounded-xl bg-surface-container hover:bg-surface-container-high active:bg-primary active:text-on-primary text-xl font-bold font-mono text-on-surface flex items-center justify-center shadow-sm transition-all active:scale-95 disabled:opacity-50"
                   >
-                    Borrar
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    onClick={() => handlePinDigit('0')}
-                    sx={{
-                      height: 48,
-                      fontSize: '1.15rem',
-                      fontWeight: 700,
-                      color: '#0f172a',
-                      backgroundColor: '#f8fafc',
-                      borderColor: '#e2e8f0',
-                    }}
-                  >
-                    0
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    onClick={handlePinBackspace}
-                    sx={{
-                      height: 48,
-                      color: '#64748b',
-                      borderColor: '#e2e8f0',
-                    }}
-                  >
-                    <Delete size={18} />
-                  </Button>
-                </Box>
-
-                <Button
-                  fullWidth
-                  variant="contained"
-                  color="primary"
-                  onClick={() => handlePinSubmit()}
-                  disabled={pin.length !== 4 || isSubmitting}
-                  sx={{ py: 1.25, fontWeight: 700 }}
+                    {digit}
+                  </button>
+                ))}
+                {/* Botón Limpiar (C) */}
+                <button
+                  type="button"
+                  onClick={handlePinClear}
+                  disabled={isSubmitting || pin.length === 0}
+                  className="h-14 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-bold text-on-surface-variant flex items-center justify-center transition-all active:scale-95 disabled:opacity-40"
+                  title="Borrar todo"
                 >
-                  {isSubmitting ? (
-                    <CircularProgress size={20} color="inherit" />
-                  ) : (
-                    'Ingresar a Estación'
-                  )}
-                </Button>
-
-                <Typography
-                  variant="caption"
-                  sx={{ display: 'block', textAlign: 'center', color: '#94a3b8', mt: 2 }}
-                >
-                  Demostración: PIN de mozo/cocinero es <strong>1234</strong>
-                </Typography>
-              </Box>
-            )}
-
-            {/* MODO 1: Acceso Administrativo (Usuario / Contraseña) */}
-            {tabIndex === 1 && (
-              <Box component="form" onSubmit={handleAdminSubmit}>
-                <TextField
-                  fullWidth
-                  label="Usuario"
-                  size="small"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                  sx={{ mb: 2 }}
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <User size={16} color="#94a3b8" />
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-
-                <TextField
-                  fullWidth
-                  label="Contraseña"
-                  type={showPassword ? 'text' : 'password'}
-                  size="small"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  sx={{ mb: 3 }}
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Lock size={16} color="#94a3b8" />
-                        </InputAdornment>
-                      ),
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton size="small" onClick={() => setShowPassword(!showPassword)}>
-                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-
-                <Button
-                  fullWidth
-                  type="submit"
-                  variant="contained"
-                  color="secondary"
+                  LIMPIAR
+                </button>
+                {/* Dígito 0 */}
+                <button
+                  type="button"
+                  onClick={() => handlePinDigit('0')}
                   disabled={isSubmitting}
-                  sx={{ py: 1.25, fontWeight: 700, display: 'flex', gap: 1 }}
+                  className="h-14 rounded-xl bg-surface-container hover:bg-surface-container-high active:bg-primary active:text-on-primary text-xl font-bold font-mono text-on-surface flex items-center justify-center shadow-sm transition-all active:scale-95 disabled:opacity-50"
                 >
-                  {isSubmitting ? (
-                    <CircularProgress size={20} color="inherit" />
-                  ) : (
-                    <>
-                      <span>Ingresar a Administración</span>
-                      <ArrowRight size={16} />
-                    </>
-                  )}
-                </Button>
-
-                <Typography
-                  variant="caption"
-                  sx={{ display: 'block', textAlign: 'center', color: '#94a3b8', mt: 2 }}
+                  0
+                </button>
+                {/* Botón Retroceso (Backspace) */}
+                <button
+                  type="button"
+                  onClick={handlePinBackspace}
+                  disabled={isSubmitting || pin.length === 0}
+                  className="h-14 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center justify-center transition-all active:scale-95 disabled:opacity-40"
+                  title="Borrar último"
                 >
-                  Demostración: <strong>admin</strong> / <strong>admin123</strong>
-                </Typography>
-              </Box>
-            )}
-          </CardContent>
-        </Card>
-      </Container>
+                  <span className="material-symbols-outlined text-[24px]">backspace</span>
+                </button>
+              </div>
 
-      {/* Pie de Página */}
-      <Box sx={{ textAlign: 'center', pb: 3 }}>
-        <Typography variant="caption" sx={{ color: '#94a3b8' }}>
-          Sistema KDS v1.0 • Acceso autorizado para personal de La Retama
-        </Typography>
-      </Box>
+              {/* Botón de Confirmación Manual */}
+              <button
+                type="button"
+                onClick={() => submitPin(pin)}
+                disabled={isSubmitting || pin.length !== 4}
+                className="w-full max-w-xs bg-primary hover:bg-primary-container text-on-primary py-3.5 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <span className="inline-block w-5 h-5 border-2 border-on-primary border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[20px]">login</span>
+                    <span>INGRESAR CON PIN</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
 
-      {/* Marca de agua institucional */}
+          {/* MODO 2: Acceso Administrativo (HU001 Escenario 2) */}
+          {activeTab === 'admin' && (
+            <form onSubmit={handleAdminSubmit} className="flex flex-col gap-4 text-left">
+              {/* Campo Usuario */}
+              <div>
+                <label
+                  htmlFor="admin-username"
+                  className="block text-xs font-bold uppercase tracking-wider text-on-surface mb-1.5"
+                >
+                  Usuario de Administración
+                </label>
+                <div className="relative flex items-center">
+                  <span className="material-symbols-outlined absolute left-3 text-[20px] text-on-surface-variant pointer-events-none">
+                    badge
+                  </span>
+                  <input
+                    id="admin-username"
+                    type="text"
+                    required
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Ej. admin"
+                    className="w-full bg-surface-container-low text-on-surface pl-10 pr-3 py-3 rounded-xl text-sm font-medium placeholder:text-outline border border-surface-container-high focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Campo Contraseña */}
+              <div>
+                <label
+                  htmlFor="admin-password"
+                  className="block text-xs font-bold uppercase tracking-wider text-on-surface mb-1.5"
+                >
+                  Contraseña
+                </label>
+                <div className="relative flex items-center">
+                  <span className="material-symbols-outlined absolute left-3 text-[20px] text-on-surface-variant pointer-events-none">
+                    lock
+                  </span>
+                  <input
+                    id="admin-password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-surface-container-low text-on-surface pl-10 pr-10 py-3 rounded-xl text-sm font-medium placeholder:text-outline border border-surface-container-high focus:outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 text-on-surface-variant hover:text-on-surface p-1"
+                    title={showPassword ? 'Ocultar' : 'Mostrar'}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">
+                      {showPassword ? 'visibility_off' : 'visibility'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Botón Ingresar Admin */}
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full mt-2 bg-primary hover:bg-primary-container text-on-primary py-3.5 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <span className="inline-block w-5 h-5 border-2 border-on-primary border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[20px]">verified_user</span>
+                    <span>INGRESAR AL PANEL ADMIN</span>
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+
+          {/* Información de Ayuda Operativa de Guardia */}
+          <div className="mt-6 pt-4 border-t border-surface-container-high flex items-center justify-between text-[11px] text-on-surface-variant">
+            <span>
+              Credenciales demo: <strong className="text-on-surface">admin / admin123</strong>
+            </span>
+            <span>
+              PIN Mozo: <strong className="text-on-surface">1234</strong>
+            </span>
+          </div>
+        </div>
+      </main>
+
       <LaRetamaWatermark />
-    </Box>
+    </div>
   );
 };
