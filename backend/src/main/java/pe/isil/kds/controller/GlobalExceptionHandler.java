@@ -13,6 +13,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import pe.isil.kds.exception.EstadoDesactualizadoException;
 import pe.isil.kds.exception.OperacionNoPermitidaException;
+import pe.isil.kds.exception.RecursoNoEncontradoException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -68,6 +69,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleCuerpoIlegible(HttpMessageNotReadableException ex) {
         return buildResponse(HttpStatus.BAD_REQUEST, "Solicitud inválida",
                 "El cuerpo de la solicitud no tiene el formato esperado o contiene valores no permitidos.");
+    }
+
+    @ExceptionHandler(RecursoNoEncontradoException.class)
+    public ResponseEntity<Map<String, Object>> handleRecursoNoEncontrado(RecursoNoEncontradoException ex) {
+        return buildResponse(HttpStatus.NOT_FOUND, "Recurso no encontrado", ex.getMessage());
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

@@ -5,11 +5,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import pe.isil.kds.dto.CrearPedidoRequest;
 import pe.isil.kds.dto.PedidoResponse;
+import pe.isil.kds.dto.TransicionDto;
 import pe.isil.kds.service.PedidoService;
+import pe.isil.kds.service.TrazabilidadService;
 
 import java.util.List;
 import java.util.Map;
@@ -23,9 +26,11 @@ import java.util.Map;
 public class PedidoController {
 
     private final PedidoService pedidoService;
+    private final TrazabilidadService trazabilidadService;
 
-    public PedidoController(PedidoService pedidoService) {
+    public PedidoController(PedidoService pedidoService, TrazabilidadService trazabilidadService) {
         this.pedidoService = pedidoService;
+        this.trazabilidadService = trazabilidadService;
     }
 
     @Operation(summary = "Abrir nueva comanda desde el comandero de sala (HU006)")
@@ -45,6 +50,13 @@ public class PedidoController {
     @GetMapping("/{id}")
     public ResponseEntity<PedidoResponse> obtenerComanda(@PathVariable Long id) {
         return ResponseEntity.ok(pedidoService.obtenerPorId(id));
+    }
+
+    @Operation(summary = "Historial de transiciones de un pedido y sus ítems en orden cronológico (HU022, Admin)")
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/{id}/historial")
+    public ResponseEntity<List<TransicionDto>> historial(@PathVariable Long id) {
+        return ResponseEntity.ok(trazabilidadService.historialPedido(id));
     }
 
     @Operation(summary = "Listar todas las comandas activas del restaurante")

@@ -10,9 +10,13 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import pe.isil.kds.dto.CambiarEstadoItemRequest;
 import pe.isil.kds.dto.ItemCocinaDto;
+import pe.isil.kds.dto.TransicionDto;
 import pe.isil.kds.exception.EstadoDesactualizadoException;
 import pe.isil.kds.security.SesionKds;
 import pe.isil.kds.service.CicloVidaItemService;
+import pe.isil.kds.service.TrazabilidadService;
+
+import java.util.List;
 
 /**
  * Controlador del ciclo de vida de ítems de pedido (HU013).
@@ -23,9 +27,18 @@ import pe.isil.kds.service.CicloVidaItemService;
 public class ItemController {
 
     private final CicloVidaItemService cicloVidaItemService;
+    private final TrazabilidadService trazabilidadService;
 
-    public ItemController(CicloVidaItemService cicloVidaItemService) {
+    public ItemController(CicloVidaItemService cicloVidaItemService, TrazabilidadService trazabilidadService) {
         this.cicloVidaItemService = cicloVidaItemService;
+        this.trazabilidadService = trazabilidadService;
+    }
+
+    @Operation(summary = "Historial de transiciones de un ítem en orden cronológico (HU022, Admin)")
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/{id}/historial")
+    public ResponseEntity<List<TransicionDto>> historial(@PathVariable Long id) {
+        return ResponseEntity.ok(trazabilidadService.historialItem(id));
     }
 
     @Operation(summary = "Cambiar el estado de un ítem según el flujo definido (HU013)")

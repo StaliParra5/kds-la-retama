@@ -3,6 +3,7 @@ package pe.isil.kds.service;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pe.isil.kds.exception.RecursoNoEncontradoException;
 import pe.isil.kds.dto.CrearPedidoRequest;
 import pe.isil.kds.dto.ItemPedidoRequest;
 import pe.isil.kds.dto.PedidoResponse;
@@ -142,7 +143,7 @@ public class PedidoService {
     @Transactional(readOnly = true)
     public PedidoResponse obtenerPorId(Long id) {
         Pedido pedido = pedidoRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Pedido no encontrado con ID: " + id));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Pedido no encontrado con ID: " + id));
         return convertirADto(pedido);
     }
 

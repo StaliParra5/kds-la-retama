@@ -1,6 +1,9 @@
 package pe.isil.kds.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Immutable;
+
 import java.time.LocalDateTime;
 
 /**
@@ -8,6 +11,7 @@ import java.time.LocalDateTime;
  * Base para auditoría de acciones y analítica de tiempos reales de despacho y cuellos de botella (HU022 / HU028).
  */
 @Entity
+@Immutable // HU022 Esc. 5: Hibernate nunca emite UPDATE; un trigger en BD bloquea UPDATE/DELETE
 @Table(name = "transiciones_estado")
 public class TransicionEstado {
 
@@ -33,8 +37,12 @@ public class TransicionEstado {
     @JoinColumn(name = "usuario_id")
     private Usuario usuario;
 
+    // HU022 Esc. 6: la hora la asigna el servidor al insertar la fila, nunca el cliente.
+    // Se toma en el momento del INSERT (no al iniciar la transacción, como CURRENT_TIMESTAMP),
+    // así una transición que esperó un bloqueo no queda con hora anterior a la que la precede.
+    @CreationTimestamp
     @Column(name = "fecha_hora", nullable = false, updatable = false)
-    private LocalDateTime fechaHora = LocalDateTime.now();
+    private LocalDateTime fechaHora;
 
     @Column(columnDefinition = "TEXT")
     private String motivo;
@@ -60,7 +68,6 @@ public class TransicionEstado {
     public void setUsuario(Usuario usuario) { this.usuario = usuario; }
 
     public LocalDateTime getFechaHora() { return fechaHora; }
-    public void setFechaHora(LocalDateTime fechaHora) { this.fechaHora = fechaHora; }
 
     public String getMotivo() { return motivo; }
     public void setMotivo(String motivo) { this.motivo = motivo; }

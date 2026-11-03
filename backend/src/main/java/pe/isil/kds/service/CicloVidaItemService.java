@@ -4,6 +4,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pe.isil.kds.exception.RecursoNoEncontradoException;
 import pe.isil.kds.dto.CambiarEstadoItemRequest;
 import pe.isil.kds.dto.ItemCocinaDto;
 import pe.isil.kds.exception.EstadoDesactualizadoException;
@@ -60,11 +61,11 @@ public class CicloVidaItemService {
     @Transactional
     public ItemCocinaDto cambiarEstado(Long itemId, CambiarEstadoItemRequest request, SesionKds sesion) {
         Long pedidoId = detalleRepository.findPedidoIdById(itemId)
-                .orElseThrow(() -> new IllegalArgumentException("Ítem no encontrado con ID: " + itemId));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Ítem no encontrado con ID: " + itemId));
         // Bloquear el pedido antes de leer sus ítems: la lectura posterior ya es la vigente
         pedidoRepository.bloquearPorId(pedidoId);
         DetallePedido item = detalleRepository.findById(itemId)
-                .orElseThrow(() -> new IllegalArgumentException("Ítem no encontrado con ID: " + itemId));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Ítem no encontrado con ID: " + itemId));
 
         EstadoItem origen = item.getEstadoItem();
         EstadoItem destino = request.getEstadoDestino();
@@ -100,7 +101,7 @@ public class CicloVidaItemService {
     public ItemCocinaDto obtenerItem(Long itemId) {
         return detalleRepository.findById(itemId)
                 .map(ItemCocinaMapper::aDto)
-                .orElseThrow(() -> new IllegalArgumentException("Ítem no encontrado con ID: " + itemId));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Ítem no encontrado con ID: " + itemId));
     }
 
     private void validarPermiso(DetallePedido item, EstadoItem destino, SesionKds sesion) {

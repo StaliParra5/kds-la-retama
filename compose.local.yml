@@ -12,6 +12,9 @@ services:
       POSTGRES_DB: kds_db
       POSTGRES_USER: kds_user
       POSTGRES_PASSWORD: kds_secret_pass
+      # Hora local del restaurante para CURRENT_TIMESTAMP y registros de la BD (HU022)
+      TZ: America/Lima
+      PGTZ: America/Lima
     ports:
       # Mapeo a 5433 en el host para evitar colisión con el PostgreSQL nativo en 5432,
       # manteniendo 5432 dentro de la red interna de contenedores
@@ -44,6 +47,9 @@ services:
       SPRING_DATASOURCE_PASSWORD: kds_secret_pass
       JWT_SECRET: kds_secret_super_secure_key_for_jwt_tokens_2026_isil_la_retama
       SERVER_PORT: 8080
+      # Hora local del restaurante: todas las transiciones usan el reloj del servidor (HU022)
+      TZ: America/Lima
+      KDS_ZONA_HORARIA: America/Lima
     networks:
       - kds-network
 

@@ -255,3 +255,12 @@
   - Notificación por WebSocket tras el commit (`/topic/estacion/{id}`, `/topic/items`) con `NotificadorKds`.
   - Errores: cuerpo ilegible → 400 y ruta inexistente → 404 (antes 500).
   - Criterio de Aceptación: Escenarios 1 a 6 de HU013; `EstadoItemTest`, `CicloVidaItemServiceTest`; smoke de API 17/17 con carreras simultáneas reales (mismo ítem y dos ítems del mismo pedido).
+
+- [x] **TASK-053 [BE] [B1] Trazabilidad de Transiciones (HU022)**
+  - `TrazabilidadService` centraliza el registro (pedido e ítems) con usuario responsable (Esc. 1).
+  - `GET /api/v1/items/{id}/historial` y `GET /api/v1/pedidos/{id}/historial` (solo Admin, D10) en orden cronológico (Esc. 2).
+  - Transiciones sin usuario figuran como "Sistema" (Esc. 3; el motor de secuenciación queda fuera del sprint, D2).
+  - Historial de solo inserción: entidad `@Immutable` y triggers (migración V7) que bloquean `UPDATE`, `DELETE` y `TRUNCATE` también por SQL directo; un pedido con historial no se elimina, se anula (Esc. 4 y 5).
+  - Hora asignada por el servidor al insertar (`@CreationTimestamp`, no `CURRENT_TIMESTAMP`, que es la hora de inicio de la transacción) y servidor/BD fijados en `America/Lima` (`KDS_ZONA_HORARIA`, `TZ`) para que todas las PCs usen la hora del servidor (Esc. 6).
+  - Historial cargado en una consulta (`@EntityGraph`); ítem o pedido inexistente → 404.
+  - Criterio de Aceptación: Escenarios 1 a 6 de HU022; `TrazabilidadServiceTest`; smoke de API/BD 11/11.
