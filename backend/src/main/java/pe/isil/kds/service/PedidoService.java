@@ -1,11 +1,12 @@
 package pe.isil.kds.service;
 
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.isil.kds.exception.OperacionNoPermitidaException;
 import pe.isil.kds.exception.RecursoNoEncontradoException;
 import pe.isil.kds.dto.CrearPedidoRequest;
+import pe.isil.kds.dto.ItemCocinaDto;
 import pe.isil.kds.dto.ItemPedidoRequest;
 import pe.isil.kds.dto.PedidoResponse;
 import pe.isil.kds.model.*;
@@ -28,6 +29,9 @@ import java.util.stream.Collectors;
  * - Una clave de idempotencia repetida devuelve el pedido ya registrado sin duplicarlo (HU009 Esc. 2 y 5),
  *   siempre que la use el mismo mozo con el mismo contenido; si no, se rechaza (409).
  * - Se rechazan platos agotados o dados de baja indicando cuál (HU009 Esc. 6).
+ * - Cada ítem se enruta a la estación del plato vigente al pedirlo; si esa estación está
+ *   desactivada el envío se rechaza (HU011 Esc. 5 y 6). Las estaciones reciben sus ítems por
+ *   WebSocket solo después del commit (HU011 Esc. 1 a 3).
  * - Cada comanda recibe un código correlativo único diario secuencial (HU006 Escenario 1).
  * - Calcula subtotales y totales preservando precios unitarios y tiempos estándar en cada detalle.
  * - Normaliza los modificadores de cada ítem: sin espacios sobrantes y nulos si vienen vacíos (HU008).
@@ -42,7 +46,7 @@ public class PedidoService {
     private final PlatoRepository platoRepository;
     private final UsuarioRepository usuarioRepository;
     private final TrazabilidadService trazabilidadService;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PedidoService(
             PedidoRepository pedidoRepository,
@@ -51,14 +55,14 @@ public class PedidoService {
             PlatoRepository platoRepository,
             UsuarioRepository usuarioRepository,
             TrazabilidadService trazabilidadService,
-            SimpMessagingTemplate messagingTemplate) {
+            ApplicationEventPublisher eventPublisher) {
         this.pedidoRepository = pedidoRepository;
         this.canalRepository = canalRepository;
         this.mesaRepository = mesaRepository;
         this.platoRepository = platoRepository;
         this.usuarioRepository = usuarioRepository;
         this.trazabilidadService = trazabilidadService;
-        this.messagingTemplate = messagingTemplate;
+        this.eventPublisher = eventPublisher;
     }
 
     /** Resultado de un envío: el pedido y si se creó ahora (201) o ya existía para esa clave (200). */
@@ -178,8 +182,14 @@ public class PedidoService {
                 throw new IllegalArgumentException("El plato '" + plato.getNombre() + "' está agotado. Retírelo de la comanda.");
             }
 
+            // HU011 Escenario 6: un plato sin estación activa no puede enrutarse
+            if (plato.getEstacion() == null || !Boolean.TRUE.equals(plato.getEstacion().getActivo())) {
+                throw new IllegalArgumentException("El plato '" + plato.getNombre() + "' no tiene una estación de cocina activa.");
+            }
+
             DetallePedido detalle = new DetallePedido();
             detalle.setPlato(plato);
+            // HU011 Escenario 5: la estación se fija al pedir; reasignar el plato después no mueve este ítem
             detalle.setEstacion(plato.getEstacion());
             detalle.setCantidad(itemReq.getCantidad());
             detalle.setPrecioUnitario(plato.getPrecio());
@@ -206,12 +216,11 @@ public class PedidoService {
 
         PedidoResponse response = convertirADto(pedidoGuardado);
 
-        // Notificación en tiempo real vía WebSocket a monitores suscritos en LAN
-        try {
-            messagingTemplate.convertAndSend("/topic/pedidos", response);
-        } catch (Exception e) {
-            // No bloquear la transacción si el broker aún no tiene clientes conectados
-        }
+        // HU011: cada ítem viaja solo al tópico de su estación; se publica tras el commit
+        List<ItemCocinaDto> itemsCocina = pedidoGuardado.getItems().stream().map(ItemCocinaMapper::aDto).toList();
+        eventPublisher.publishEvent(new NotificadorKds.ItemsKdsEvent(NotificadorKds.TipoEvento.ITEM_NUEVO, itemsCocina));
+        eventPublisher.publishEvent(new NotificadorKds.PedidoKdsEvent(NotificadorKds.TipoEventoPedido.PEDIDO_NUEVO,
+                pedidoGuardado.getId(), pedidoGuardado.getCodigoCorrelativo(), pedidoGuardado.getEstado().name()));
 
         return response;
     }

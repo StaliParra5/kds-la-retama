@@ -273,3 +273,10 @@
   - Rechazo de platos agotados o dados de baja indicando cuál; el comandero refresca la carta (Esc. 6). Comanda vacía rechazada (Esc. 3). Sin endpoints de edición directa (Esc. 4).
   - Método HTTP no soportado → 405 y conflicto de integridad → 409 (antes 500).
   - Criterio de Aceptación: Escenarios 1 a 6 de HU009; `PedidoServiceTest`; `PedidoControllerTest`; smoke API 19/19 y E2E 11/11 (respuesta perdida y 502 tras registrar el pedido).
+
+- [x] **TASK-055 [BE] [B1] Enrutamiento de Ítems por Estación (HU011)**
+  - Al registrar la comanda, cada ítem se publica tras el commit solo en `/topic/estacion/{id}` de su estación, como un único ítem con cantidad y modificadores (Esc. 1 a 3); altas y cambios de estado de pedidos en `/topic/pedidos` con el contrato `{tipo, pedidoId, codigoPedido, estado}` (`NotificadorKds`, ya sin envíos dentro de la transacción; primero el ítem y luego el pedido).
+  - `GET /api/v1/estaciones/{id}/cola`: cola activa (Recibido, En espera, En preparación) desde la BD para la pantalla que se conecta tarde; un cocinero solo lee la de su estación (Esc. 4).
+  - La estación se fija al pedir: reasignar el plato no mueve ítems ya enviados (Esc. 5).
+  - Plato sin estación activa → 400 indicando el plato (Esc. 6). Nota: HU004 impide desactivar desde administración una estación con platos asignados, por lo que el caso solo se da por cambios directos en BD; la validación queda como defensa.
+  - Criterio de Aceptación: Escenarios 1 a 6 de HU011; `PedidoServiceTest`, `CocinaServiceTest`; smoke con suscriptores STOMP reales 17/17.

@@ -7,13 +7,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.context.ApplicationEventPublisher;
 import pe.isil.kds.dto.CrearPedidoRequest;
 import pe.isil.kds.dto.ItemPedidoRequest;
 import pe.isil.kds.dto.PedidoResponse;
 import pe.isil.kds.exception.OperacionNoPermitidaException;
 import pe.isil.kds.model.*;
 import pe.isil.kds.repository.*;
+import pe.isil.kds.service.NotificadorKds;
 import pe.isil.kds.service.PedidoService;
 import pe.isil.kds.service.TrazabilidadService;
 
@@ -52,7 +53,7 @@ class PedidoServiceTest {
     private TrazabilidadService trazabilidadService;
 
     @Mock
-    private SimpMessagingTemplate messagingTemplate;
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private PedidoService pedidoService;
@@ -62,6 +63,7 @@ class PedidoServiceTest {
     private Mesa mesa08;
     private Usuario mozo;
     private Plato plato;
+    private Estacion estacion;
 
     @BeforeEach
     void setUp() {
@@ -85,7 +87,7 @@ class PedidoServiceTest {
         mozo.setNombre("Angie");
         mozo.setApellido("Valencia");
 
-        Estacion estacion = new Estacion();
+        estacion = new Estacion();
         estacion.setId(1L);
         estacion.setNombre("Plancha");
 
@@ -363,12 +365,107 @@ class PedidoServiceTest {
         assertNotNull(response.getFechaEnvioCocina());
     }
 
+    @Test
+    @DisplayName("HU011 Escenario 6: Un plato cuya estación fue desactivada impide el envío e indica cuál")
+    void crearComanda_EstacionInactiva_EsRechazado() {
+        estacion.setActivo(false);
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(1L);
+        req.setMesaId(8L);
+        req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
+
+        when(canalRepository.findById(1L)).thenReturn(Optional.of(canalSalon));
+        when(mesaRepository.findById(8L)).thenReturn(Optional.of(mesa08));
+        when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
+        when(platoRepository.findById(50L)).thenReturn(Optional.of(plato));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+                pedidoService.crearComanda(req, "angie"));
+        assertTrue(ex.getMessage().contains("Lomo Saltado"));
+        assertTrue(ex.getMessage().contains("estación"));
+        verify(pedidoRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("HU011 Escenarios 1 a 3: Cada ítem se enruta a su estación con cantidad y modificador, notificado tras el commit")
+    void crearComanda_EnrutaItemsPorEstacion() {
+        Estacion frios = new Estacion();
+        frios.setId(2L);
+        frios.setNombre("Fríos");
+        Plato causa = new Plato();
+        causa.setId(60L);
+        causa.setNombre("Causa Limeña");
+        causa.setPrecio(new BigDecimal("16.00"));
+        causa.setTiempoEstandarMinutos(6);
+        causa.setEstacion(frios);
+
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(1L);
+        req.setMesaId(8L);
+        req.setItems(List.of(new ItemPedidoRequest(50L, 3, "Sin cebolla"), new ItemPedidoRequest(60L, 1, null)));
+
+        prepararAperturaValida();
+        when(platoRepository.findById(60L)).thenReturn(Optional.of(causa));
+
+        PedidoResponse response = pedidoService.crearComanda(req, "angie");
+
+        assertEquals(List.of("Plancha", "Fríos"), response.getItems().stream().map(i -> i.getEstacionNombre()).toList());
+        org.mockito.ArgumentCaptor<Object> captor = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, times(2)).publishEvent(captor.capture());
+        NotificadorKds.ItemsKdsEvent evento = captor.getAllValues().stream()
+                .filter(NotificadorKds.ItemsKdsEvent.class::isInstance)
+                .map(NotificadorKds.ItemsKdsEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertTrue(captor.getAllValues().stream().anyMatch(NotificadorKds.PedidoKdsEvent.class::isInstance));
+        assertEquals(NotificadorKds.TipoEvento.ITEM_NUEVO, evento.tipo());
+        assertEquals(2, evento.items().size());
+        var lomo = evento.items().get(0);
+        assertEquals(1L, lomo.getEstacionId());
+        assertEquals(3, lomo.getCantidad());
+        assertEquals("Sin cebolla", lomo.getModificadores());
+        assertEquals(2L, evento.items().get(1).getEstacionId());
+        // HU012 Escenario 4: cada ítem sabe cuántos ítems tiene el pedido en otras estaciones
+        assertEquals(1, lomo.getItemsEnOtrasEstaciones());
+    }
+
+    @Test
+    @DisplayName("HU011 Escenario 5: Reasignar el plato de estación no mueve los ítems ya enviados")
+    void crearComanda_EstacionFijadaAlPedir() {
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(1L);
+        req.setMesaId(8L);
+        req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
+        prepararAperturaValida();
+        java.util.List<Pedido> guardados = new java.util.ArrayList<>();
+        when(pedidoRepository.saveAndFlush(any(Pedido.class))).thenAnswer(invocation -> {
+            Pedido p = invocation.getArgument(0);
+            guardados.add(p);
+            return p;
+        });
+
+        pedidoService.crearComanda(req, "angie");
+
+        Estacion frituras = new Estacion();
+        frituras.setId(9L);
+        frituras.setNombre("Frituras");
+        plato.setEstacion(frituras); // el administrador mueve el plato después del envío
+
+        // El ítem persistido conserva su estación aunque el plato ahora apunte a otra
+        DetallePedido itemEnviado = guardados.get(0).getItems().get(0);
+        assertEquals("Plancha", itemEnviado.getEstacion().getNombre());
+        assertEquals("Frituras", itemEnviado.getPlato().getEstacion().getNombre());
+
+        PedidoResponse nuevo = pedidoService.crearComanda(req, "angie");
+        assertEquals("Frituras", nuevo.getItems().get(0).getEstacionNombre());
+    }
+
     private void prepararAperturaValida() {
         when(canalRepository.findById(1L)).thenReturn(Optional.of(canalSalon));
         when(mesaRepository.findById(8L)).thenReturn(Optional.of(mesa08));
         when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
         when(platoRepository.findById(anyLong())).thenReturn(Optional.of(plato));
         when(pedidoRepository.obtenerSiguienteValorSecuencia()).thenReturn(1L);
-        when(pedidoRepository.saveAndFlush(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        // lenient: algunos tests sustituyen este stub para capturar el pedido guardado
+        lenient().when(pedidoRepository.saveAndFlush(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 }

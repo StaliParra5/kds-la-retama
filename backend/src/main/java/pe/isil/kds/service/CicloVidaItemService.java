@@ -22,6 +22,7 @@ import pe.isil.kds.security.SesionKds;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Servicio del ciclo de vida de los ítems (HU013).
@@ -90,10 +91,12 @@ public class CicloVidaItemService {
         item.setEstadoItem(destino);
         detalleRepository.saveAndFlush(item);
         trazabilidadService.registrarItem(item, origen.name(), destino.name(), usuario, null);
-        actualizarEstadoPedido(item.getPedido(), usuario);
+        Optional<NotificadorKds.PedidoKdsEvent> cambioPedido = actualizarEstadoPedido(item.getPedido(), usuario);
 
+        // Orden fijo de notificación: primero el ítem que cambió y luego el pedido que derivó de él
         ItemCocinaDto dto = ItemCocinaMapper.aDto(item);
         eventPublisher.publishEvent(new NotificadorKds.ItemsKdsEvent(NotificadorKds.TipoEvento.ITEM_ACTUALIZADO, List.of(dto)));
+        cambioPedido.ifPresent(eventPublisher::publishEvent);
         return dto;
     }
 
@@ -125,17 +128,19 @@ public class CicloVidaItemService {
         }
     }
 
-    /** Recalcula el estado agregado del pedido y registra la transición si cambia. */
-    void actualizarEstadoPedido(Pedido pedido, Usuario usuario) {
+    /** Recalcula el estado agregado del pedido; si cambia, registra la transición y devuelve el evento a notificar. */
+    Optional<NotificadorKds.PedidoKdsEvent> actualizarEstadoPedido(Pedido pedido, Usuario usuario) {
         EstadoPedido anterior = pedido.getEstado();
         EstadoPedido nuevo = EstadoPedido.derivar(pedido.getItems().stream().map(DetallePedido::getEstadoItem).toList());
         if (nuevo == anterior) {
-            return;
+            return Optional.empty();
         }
         pedido.setEstado(nuevo);
         if (nuevo == EstadoPedido.DESPACHADO) {
             pedido.setFechaDespacho(LocalDateTime.now());
         }
         trazabilidadService.registrarPedido(pedido, anterior != null ? anterior.name() : null, nuevo.name(), usuario, null);
+        return Optional.of(new NotificadorKds.PedidoKdsEvent(NotificadorKds.TipoEventoPedido.PEDIDO_ACTUALIZADO,
+                pedido.getId(), pedido.getCodigoCorrelativo(), nuevo.name()));
     }
 }

@@ -30,6 +30,8 @@ spring:
     properties:
       hibernate:
         format_sql: false
+        # Carga perezosa por lotes (ej. ítems de varios pedidos en la cola de una estación)
+        default_batch_fetch_size: 50
 
   flyway:
     enabled: true
