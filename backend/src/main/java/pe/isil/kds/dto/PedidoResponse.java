@@ -13,6 +13,8 @@ public class PedidoResponse {
     private String canalCodigo;
     private String canalNombre;
     private Integer canalSlaMinutos;
+    // Acuse de recibo: hora en que el servidor registró el envío a cocina (HU009 Esc. 1)
+    private java.time.LocalDateTime fechaEnvioCocina;
     private Long mesaId;
     private String mesaNumero;
     private String usuarioNombre;
@@ -40,6 +42,9 @@ public class PedidoResponse {
 
     public String getCanalNombre() { return canalNombre; }
     public void setCanalNombre(String canalNombre) { this.canalNombre = canalNombre; }
+
+    public java.time.LocalDateTime getFechaEnvioCocina() { return fechaEnvioCocina; }
+    public void setFechaEnvioCocina(java.time.LocalDateTime fechaEnvioCocina) { this.fechaEnvioCocina = fechaEnvioCocina; }
 
     public Integer getCanalSlaMinutos() { return canalSlaMinutos; }
     public void setCanalSlaMinutos(Integer canalSlaMinutos) { this.canalSlaMinutos = canalSlaMinutos; }

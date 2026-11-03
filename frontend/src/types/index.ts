@@ -106,6 +106,7 @@ export interface PedidoResponse {
   canalCodigo: string;
   canalNombre: string;
   canalSlaMinutos: number;
+  fechaEnvioCocina: string;
   mesaId?: number | null;
   mesaNumero?: string | null;
   usuarioNombre: string;

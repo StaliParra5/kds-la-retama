@@ -3,6 +3,7 @@ package pe.isil.kds.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,7 +34,7 @@ public class PedidoController {
         this.trazabilidadService = trazabilidadService;
     }
 
-    @Operation(summary = "Abrir nueva comanda desde el comandero de sala (HU006)")
+    @Operation(summary = "Registrar y enviar la comanda a cocina en una sola acción (HU006, HU009)")
     @PostMapping
     public ResponseEntity<PedidoResponse> abrirComanda(
             @Valid @RequestBody CrearPedidoRequest request,
@@ -42,8 +43,26 @@ public class PedidoController {
             throw new org.springframework.security.authentication.BadCredentialsException("Debe contar con una sesión activa para abrir una comanda.");
         }
         String username = authentication.getName();
-        PedidoResponse creada = pedidoService.crearComanda(request, username);
-        return ResponseEntity.status(HttpStatus.CREATED).body(creada);
+        try {
+            // HU009 Esc. 2 y 5: una clave ya registrada devuelve el mismo pedido (200); uno nuevo responde 201
+            PedidoService.ResultadoEnvio resultado = pedidoService.registrarComanda(request, username);
+            return ResponseEntity.status(resultado.creado() ? HttpStatus.CREATED : HttpStatus.OK).body(resultado.pedido());
+        } catch (DataIntegrityViolationException e) {
+            // Envíos simultáneos con la misma clave: el que perdió la carrera devuelve el pedido del ganador
+            if (request.getClaveIdempotencia() != null) {
+                var ganador = pedidoService.resolverClaveExistente(request, username);
+                if (ganador.isPresent()) {
+                    return ResponseEntity.ok(ganador.get());
+                }
+            }
+            throw e;
+        }
+    }
+
+    @Operation(summary = "Consultar si un envío sin confirmación llegó al servidor, por su clave (HU009)")
+    @GetMapping("/envio/{clave}")
+    public ResponseEntity<PedidoResponse> consultarEnvio(@PathVariable String clave, Authentication authentication) {
+        return ResponseEntity.ok(pedidoService.consultarEnvio(clave, authentication.getName()));
     }
 
     @Operation(summary = "Obtener el detalle de una comanda por ID")

@@ -1,23 +1,46 @@
-// Pantalla de Comandero de Sala para La Retama KDS (HU006, HU007, HU008, HU010 & HU023)
+// Pantalla de Comandero de Sala para La Retama KDS (HU006, HU007, HU008, HU009, HU010 & HU023)
 // Basada en Stitch (02 - Comandero y Toma de Pedidos / Culinary Operations Light):
 // - Subheader con selector de Canal de Venta (HU037) y Zonas/Mesas (HU005)
 // - Búsqueda rápida con respuesta instantánea (< 500 ms) y categorías (HU007)
 // - Tarjetas de platos con tiempo estándar de cocina (HU023) y precio en S/
 // - Split View: Catálogo a la izquierda (65%) e Inspector de Comanda a la derecha (35%)
 // - Cantidades y modificadores por línea; un mismo plato admite varias preparaciones (HU008)
+// - Envío en una acción con acuse del servidor y reintento sin duplicar (HU009)
 
 import { useQuery } from '@tanstack/react-query';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { LaRetamaWatermark } from '../components/common/LaRetamaWatermark';
 import { TopAppBar } from '../components/common/TopAppBar';
 import { useToast } from '../context/ToastContext';
-import type { CanalVenta, CategoriaPlato, ItemComanda, Mesa, Plato, Zona } from '../types';
+import type {
+  CanalVenta,
+  CategoriaPlato,
+  ItemComanda,
+  Mesa,
+  PedidoResponse,
+  Plato,
+  Zona,
+} from '../types';
 
 // Límites de HU008, alineados con las validaciones de ItemPedidoRequest en el backend
 const CANTIDAD_MAXIMA = 50;
 const MODIFICADORES_MAX_CARACTERES = 255;
 const MODIFICADORES_RAPIDOS = ['Sin cebolla', 'Sin ají', 'Poco picante', 'Sin sal'];
+
+// HU009: clave de idempotencia del envío. getRandomValues sí funciona por HTTP plano en la LAN
+const nuevaClaveEnvio = (): string => {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return `cmd-${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
+};
+
+const horaLocal = (fechaIso: string): string =>
+  new Date(fechaIso).toLocaleTimeString('es-PE', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 
 // Contador local de líneas (crypto.randomUUID no está disponible por HTTP plano en la LAN)
 let contadorLineas = 0;
@@ -57,6 +80,14 @@ export const ComanderoPage: React.FC = () => {
   const [itemsComanda, setItemsComanda] = useState<ItemComanda[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  // HU009: la misma clave se reutiliza en cada reintento de la misma comanda. Se guarda en refs
+  // (no en estado) para que dos pulsaciones antes del siguiente render compartan clave y bloqueo.
+  const claveEnvioRef = useRef<string | null>(null);
+  const enviandoRef = useRef<boolean>(false);
+  // Envío sin respuesta del servidor: la comanda queda bloqueada hasta reintentar o descartar
+  const [envioSinConfirmar, setEnvioSinConfirmar] = useState<boolean>(false);
+  const [acuse, setAcuse] = useState<PedidoResponse | null>(null);
+
   // Queries de datos maestros al Backend de Spring Boot
   const { data: canales = [], refetch: refetchCanales } = useQuery<CanalVenta[]>({
     queryKey: ['canales'],
@@ -85,6 +116,7 @@ export const ComanderoPage: React.FC = () => {
   }, [canales, canalSeleccionado, showToast]);
 
   const handleSeleccionarCanal = (canalId: number) => {
+    if (envioSinConfirmar) return;
     setCanalSeleccionado(canalId);
     setCanalRequiereSeleccion(false);
   };
@@ -104,7 +136,11 @@ export const ComanderoPage: React.FC = () => {
     queryFn: async () => (await apiClient.get('/categorias')).data,
   });
 
-  const { data: platos = [], isLoading: cargandoPlatos } = useQuery<Plato[]>({
+  const {
+    data: platos = [],
+    isLoading: cargandoPlatos,
+    refetch: refetchPlatos,
+  } = useQuery<Plato[]>({
     queryKey: ['platos'],
     queryFn: async () => (await apiClient.get('/platos')).data,
   });
@@ -159,6 +195,14 @@ export const ComanderoPage: React.FC = () => {
   // HU008 Escenario 3: se reutiliza la línea del plato sin modificadores; si todas tienen
   // modificadores, se abre una línea nueva para que cocina distinga cada preparación.
   const handleAgregarPlato = (plato: Plato) => {
+    if (envioSinConfirmar) {
+      showToast(
+        'Reintente el envío pendiente o elija "Editar comanda" antes de cambiarla.',
+        'warning',
+      );
+      return;
+    }
+    setAcuse(null);
     const lineaBase = itemsComanda.find((i) => i.plato.id === plato.id && !i.modificadores?.trim());
     if (lineaBase) {
       handleIncrementarLinea(lineaBase.lineaId);
@@ -211,6 +255,33 @@ export const ComanderoPage: React.FC = () => {
   const handleLimpiarComanda = () => {
     setItemsComanda([]);
     setObservacionesGenerales('');
+    claveEnvioRef.current = null;
+    setEnvioSinConfirmar(false);
+  };
+
+  // HU009: antes de permitir editar se pregunta al servidor si el envío sin confirmación llegó
+  const handleEditarTrasEnvioFallido = async () => {
+    const clave = claveEnvioRef.current;
+    if (!clave) {
+      setEnvioSinConfirmar(false);
+      return;
+    }
+    try {
+      const res = await apiClient.get<PedidoResponse>(`/pedidos/envio/${clave}`);
+      // Sí llegó: se muestra el acuse y la comanda se da por enviada (no se edita ni se duplica)
+      setAcuse(res.data);
+      showToast(`La comanda ${res.data.codigoCorrelativo} sí había llegado a cocina.`, 'info');
+      handleLimpiarComanda();
+      refrescarCorrelativo();
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        // No llegó: se puede editar con seguridad y el próximo envío usará una clave nueva
+        claveEnvioRef.current = null;
+        setEnvioSinConfirmar(false);
+        return;
+      }
+      showToast('Aún no hay conexión con el servidor para verificar el envío.', 'warning');
+    }
   };
 
   // Cálculo de totales y tiempo estimado
@@ -240,9 +311,18 @@ export const ComanderoPage: React.FC = () => {
       return;
     }
 
+    // HU009 Esc. 5: una segunda pulsación mientras hay un envío en curso no hace nada
+    if (enviandoRef.current) return;
+    enviandoRef.current = true;
+
+    // HU009 Esc. 2 y 5: la clave se genera una vez por comanda y se reutiliza al reintentar
+    const clave = claveEnvioRef.current ?? nuevaClaveEnvio();
+    claveEnvioRef.current = clave;
+
     setIsSubmitting(true);
     try {
       const payload = {
+        claveIdempotencia: clave,
         canalId: canalActual.id,
         // La mesa solo aplica a consumo en Salón; Para llevar y Delivery no la arrastran
         mesaId: esSalon ? mesaSeleccionada || null : null,
@@ -254,23 +334,41 @@ export const ComanderoPage: React.FC = () => {
         })),
       };
 
-      const res = await apiClient.post('/pedidos', payload);
+      const res = await apiClient.post<PedidoResponse>('/pedidos', payload);
       const comandaCreada = res.data;
 
+      // HU009 Esc. 1: acuse de recibo confirmado por el servidor (código y hora de registro)
+      setAcuse(comandaCreada);
       showToast(
-        `¡Comanda ${comandaCreada.codigoCorrelativo} (${comandaCreada.canalNombre}) abierta y enviada a cocina!`,
+        `Comanda ${comandaCreada.codigoCorrelativo} (${comandaCreada.canalNombre}) recibida por cocina.`,
         'success',
       );
       handleLimpiarComanda();
       refrescarCorrelativo();
     } catch (err: any) {
+      const status: number | undefined = err.response?.status;
+      if (!status || status >= 500) {
+        // HU009 Esc. 2: sin respuesta o con error del servidor/proxy (502/504) no hay certeza de que
+        // no se haya registrado; se conserva la comanda y la misma clave para reintentar
+        setEnvioSinConfirmar(true);
+        showToast(
+          'No hubo confirmación del servidor. Reintente el envío: no se duplicará.',
+          'warning',
+        );
+        return;
+      }
       const msg = err.response?.data?.mensaje || 'Error al enviar la comanda al servidor KDS.';
       showToast(msg, 'error');
-      // HU010 Escenario 4: el canal pudo desactivarse mientras se armaba la comanda
+      // Rechazo definitivo (4xx): la comanda no se registró; se desbloquea y el próximo intento usa otra clave
+      setEnvioSinConfirmar(false);
+      claveEnvioRef.current = null;
       if (err.response?.status === 400) {
+        // HU010 Esc. 4 / HU009 Esc. 6: el canal pudo desactivarse o un plato agotarse mientras se armaba
         refetchCanales();
+        refetchPlatos();
       }
     } finally {
+      enviandoRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -349,6 +447,7 @@ export const ComanderoPage: React.FC = () => {
               </div>
               <select
                 value={mesaSeleccionada}
+                disabled={envioSinConfirmar}
                 onChange={(e) => setMesaSeleccionada(e.target.value ? Number(e.target.value) : '')}
                 className="bg-surface-container-low border border-surface-container-high text-on-surface text-xs font-bold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-primary focus:outline-none"
               >
@@ -522,7 +621,8 @@ export const ComanderoPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleLimpiarComanda}
-                className="text-[11px] font-bold text-error hover:underline flex items-center gap-0.5"
+                disabled={envioSinConfirmar}
+                className="text-[11px] font-bold text-error hover:underline flex items-center gap-0.5 disabled:opacity-40 disabled:no-underline"
                 title="Limpiar todo el pedido"
               >
                 <span className="material-symbols-outlined text-[14px]">delete</span>
@@ -531,8 +631,73 @@ export const ComanderoPage: React.FC = () => {
             )}
           </div>
 
+          {/* HU009 Esc. 1: acuse de recibo del último envío confirmado por el servidor */}
+          {acuse && (
+            <output
+              aria-live="polite"
+              className="mx-3.5 mt-3 flex items-start gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2.5 text-left flex-shrink-0"
+            >
+              <span className="material-symbols-outlined text-[20px] text-primary">task_alt</span>
+              <span className="flex-1">
+                <span className="block text-xs font-extrabold text-on-surface">
+                  Recibido por cocina · {acuse.codigoCorrelativo}
+                </span>
+                <span className="block text-[11px] text-on-surface-variant">
+                  {acuse.canalNombre}
+                  {acuse.mesaNumero ? ` · Mesa ${acuse.mesaNumero}` : ''} · confirmado a las{' '}
+                  {horaLocal(acuse.fechaEnvioCocina)}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setAcuse(null)}
+                className="text-on-surface-variant hover:text-on-surface"
+                aria-label="Cerrar acuse de recibo"
+              >
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            </output>
+          )}
+
+          {/* HU009 Esc. 2: envío sin confirmación; se bloquea la edición hasta reintentar o descartar */}
+          {envioSinConfirmar && (
+            <div
+              role="alert"
+              className="mx-3.5 mt-3 rounded-xl border border-error/40 bg-error/10 px-3 py-2.5 text-left flex-shrink-0"
+            >
+              <p className="text-xs font-extrabold text-error flex items-center gap-1">
+                <span className="material-symbols-outlined text-[18px]">wifi_off</span>
+                Sin confirmación del servidor
+              </p>
+              <p className="text-[11px] text-on-surface-variant mt-1">
+                No sabemos si cocina recibió la comanda. Reintentar es seguro: no se duplicará.
+              </p>
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={handleEnviarComanda}
+                  disabled={isSubmitting}
+                  className="px-3 py-1.5 rounded-lg bg-error text-on-error text-[11px] font-bold disabled:opacity-50"
+                >
+                  Reintentar envío
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEditarTrasEnvioFallido}
+                  className="px-3 py-1.5 rounded-lg border border-surface-container-high text-[11px] font-bold text-on-surface-variant"
+                >
+                  Editar comanda
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Lista de Ítems del Ticket: contenedor flex con scroll interno autónomo */}
-          <div className="flex-1 min-h-0 p-3.5 overflow-y-auto flex flex-col gap-2.5">
+          {/* fieldset deshabilita toda la edición mientras hay un envío sin confirmar (HU009) */}
+          <fieldset
+            disabled={envioSinConfirmar}
+            className="flex-1 min-h-0 p-3.5 overflow-y-auto flex flex-col gap-2.5 min-w-0 border-0 m-0 disabled:opacity-60"
+          >
             {itemsComanda.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-on-surface-variant">
                 <span className="material-symbols-outlined text-[42px] text-outline/50 mb-2">
@@ -638,7 +803,7 @@ export const ComanderoPage: React.FC = () => {
                 </div>
               ))
             )}
-          </div>
+          </fieldset>
 
           {/* Pie de Comanda: Observaciones y Botón Enviar */}
           {/* flex-shrink-0 garantiza que el total y el botón de acción nunca sean colapsados por la lista de ítems */}
@@ -648,6 +813,7 @@ export const ComanderoPage: React.FC = () => {
               type="text"
               value={observacionesGenerales}
               onChange={(e) => setObservacionesGenerales(e.target.value)}
+              disabled={envioSinConfirmar}
               placeholder="Observación general para el pase (opcional)..."
               className="w-full bg-surface-container-lowest text-xs px-3 py-2 rounded-lg border border-surface-container-high placeholder:text-outline focus:outline-none focus:ring-1 focus:ring-primary"
             />
@@ -672,7 +838,7 @@ export const ComanderoPage: React.FC = () => {
             <button
               type="button"
               onClick={handleEnviarComanda}
-              disabled={isSubmitting || itemsComanda.length === 0}
+              disabled={isSubmitting || itemsComanda.length === 0 || envioSinConfirmar}
               className="w-full py-3.5 px-4 bg-primary hover:bg-primary-container active:scale-[0.98] text-on-primary rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-all disabled:opacity-50 cursor-pointer"
             >
               {isSubmitting ? (

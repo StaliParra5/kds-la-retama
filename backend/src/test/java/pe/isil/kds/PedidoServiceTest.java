@@ -110,7 +110,7 @@ class PedidoServiceTest {
         assertThrows(IllegalArgumentException.class, () ->
                 pedidoService.crearComanda(req, "angie"));
 
-        verify(pedidoRepository, never()).save(any());
+        verify(pedidoRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -127,7 +127,7 @@ class PedidoServiceTest {
         when(platoRepository.findById(50L)).thenReturn(Optional.of(plato));
         when(pedidoRepository.obtenerSiguienteValorSecuencia()).thenReturn(5L);
 
-        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> {
+        when(pedidoRepository.saveAndFlush(any(Pedido.class))).thenAnswer(invocation -> {
             Pedido p = invocation.getArgument(0);
             p.setId(99L);
             return p;
@@ -168,7 +168,7 @@ class PedidoServiceTest {
         when(pedidoRepository.obtenerSiguienteValorSecuencia()).thenThrow(new RuntimeException("DB sequence unreachable"));
         when(pedidoRepository.countPedidosDesde(any(LocalDateTime.class))).thenReturn(7L);
 
-        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.saveAndFlush(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         PedidoResponse response = pedidoService.crearComanda(req, "angie");
 
@@ -230,7 +230,7 @@ class PedidoServiceTest {
                 pedidoService.crearComanda(req, "angie"));
 
         assertTrue(ex.getMessage().contains("no está activo"));
-        verify(pedidoRepository, never()).save(any());
+        verify(pedidoRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -265,12 +265,110 @@ class PedidoServiceTest {
         assertDoesNotThrow(() -> pedido.setCanal(canalSalon));
     }
 
+    @Test
+    @DisplayName("HU009 Escenario 6: Un plato agotado después de agregarse impide el envío e indica cuál")
+    void crearComanda_PlatoAgotado_EsRechazado() {
+        plato.setDisponible(false);
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(1L);
+        req.setMesaId(8L);
+        req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
+
+        when(canalRepository.findById(1L)).thenReturn(Optional.of(canalSalon));
+        when(mesaRepository.findById(8L)).thenReturn(Optional.of(mesa08));
+        when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
+        when(platoRepository.findById(50L)).thenReturn(Optional.of(plato));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+                pedidoService.crearComanda(req, "angie"));
+
+        assertTrue(ex.getMessage().contains("Lomo Saltado"));
+        assertTrue(ex.getMessage().contains("agotado"));
+        verify(pedidoRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("HU009 Escenarios 2 y 5: Reenviar con la misma clave devuelve el pedido existente sin duplicarlo")
+    void crearComanda_ClaveRepetida_DevuelveExistente() {
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(1L);
+        req.setMesaId(8L);
+        req.setClaveIdempotencia("cmd-0f3a9b2c4d5e");
+        req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
+
+        Pedido existente = pedidoExistente();
+        when(pedidoRepository.findByClaveIdempotencia("cmd-0f3a9b2c4d5e")).thenReturn(Optional.of(existente));
+
+        PedidoService.ResultadoEnvio resultado = pedidoService.registrarComanda(req, "angie");
+
+        assertFalse(resultado.creado());
+        assertEquals(77L, resultado.pedido().getId());
+        verify(pedidoRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(trazabilidadService, canalRepository);
+    }
+
+    @Test
+    @DisplayName("HU009: Reutilizar una clave con otro contenido u otro mozo es rechazado (409)")
+    void crearComanda_ClaveReutilizadaDistinta_EsRechazada() {
+        when(pedidoRepository.findByClaveIdempotencia("cmd-0f3a9b2c4d5e")).thenReturn(Optional.of(pedidoExistente()));
+
+        CrearPedidoRequest otroContenido = new CrearPedidoRequest();
+        otroContenido.setCanalId(1L);
+        otroContenido.setMesaId(8L);
+        otroContenido.setClaveIdempotencia("cmd-0f3a9b2c4d5e");
+        otroContenido.setItems(List.of(new ItemPedidoRequest(50L, 3, null)));
+        assertThrows(OperacionNoPermitidaException.class, () -> pedidoService.registrarComanda(otroContenido, "angie"));
+
+        CrearPedidoRequest mismoContenido = new CrearPedidoRequest();
+        mismoContenido.setCanalId(1L);
+        mismoContenido.setMesaId(8L);
+        mismoContenido.setClaveIdempotencia("cmd-0f3a9b2c4d5e");
+        mismoContenido.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
+        assertThrows(OperacionNoPermitidaException.class, () -> pedidoService.registrarComanda(mismoContenido, "otro_mozo"));
+        verify(pedidoRepository, never()).saveAndFlush(any());
+    }
+
+    private Pedido pedidoExistente() {
+        Pedido existente = new Pedido();
+        existente.setCanal(canalSalon);
+        existente.setId(77L);
+        existente.setCodigoCorrelativo("CMD-261103-0009");
+        existente.setUsuario(mozo);
+        existente.setMesa(mesa08);
+        DetallePedido d = new DetallePedido();
+        d.setPlato(plato);
+        d.setEstacion(plato.getEstacion());
+        d.setCantidad(1);
+        d.setPrecioUnitario(plato.getPrecio());
+        d.setSubtotal(plato.getPrecio());
+        d.setTiempoEstandarMinutos(12);
+        existente.addItem(d);
+        return existente;
+    }
+
+    @Test
+    @DisplayName("HU009 Escenario 1: El pedido registrado queda ENVIADO con la hora de envío como acuse")
+    void crearComanda_AcuseConHoraDeEnvio() {
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(1L);
+        req.setMesaId(8L);
+        req.setClaveIdempotencia("cmd-11112222");
+        req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
+
+        prepararAperturaValida();
+
+        PedidoResponse response = pedidoService.crearComanda(req, "angie");
+
+        assertEquals("ENVIADO", response.getEstado());
+        assertNotNull(response.getFechaEnvioCocina());
+    }
+
     private void prepararAperturaValida() {
         when(canalRepository.findById(1L)).thenReturn(Optional.of(canalSalon));
         when(mesaRepository.findById(8L)).thenReturn(Optional.of(mesa08));
         when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
         when(platoRepository.findById(anyLong())).thenReturn(Optional.of(plato));
         when(pedidoRepository.obtenerSiguienteValorSecuencia()).thenReturn(1L);
-        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pedidoRepository.saveAndFlush(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 }

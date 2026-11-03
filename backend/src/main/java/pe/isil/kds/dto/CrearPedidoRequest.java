@@ -3,6 +3,7 @@ package pe.isil.kds.dto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -12,6 +13,10 @@ public class CrearPedidoRequest {
     private Long canalId;
 
     private Long mesaId;
+
+    // HU009 Esc. 2 y 5: clave generada por el comandero; un reintento con la misma clave no duplica el pedido
+    @Pattern(regexp = "^[A-Za-z0-9-]{8,64}$", message = "La clave de envío no tiene un formato válido")
+    private String claveIdempotencia;
 
     private String clienteNombre;
     private String clienteTelefono;
@@ -26,6 +31,9 @@ public class CrearPedidoRequest {
 
     public Long getCanalId() { return canalId; }
     public void setCanalId(Long canalId) { this.canalId = canalId; }
+
+    public String getClaveIdempotencia() { return claveIdempotencia; }
+    public void setClaveIdempotencia(String claveIdempotencia) { this.claveIdempotencia = claveIdempotencia; }
 
     public Long getMesaId() { return mesaId; }
     public void setMesaId(Long mesaId) { this.mesaId = mesaId; }

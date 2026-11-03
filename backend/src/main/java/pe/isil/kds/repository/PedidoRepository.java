@@ -16,6 +16,8 @@ import java.util.Optional;
 public interface PedidoRepository extends JpaRepository<Pedido, Long> {
     Optional<Pedido> findByCodigoCorrelativo(String codigoCorrelativo);
 
+    Optional<Pedido> findByClaveIdempotencia(String claveIdempotencia);
+
     // SELECT ... FOR UPDATE: serializa los cambios de estado de los ítems de un mismo pedido
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM Pedido p WHERE p.id = :id")

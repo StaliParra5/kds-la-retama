@@ -264,3 +264,12 @@
   - Hora asignada por el servidor al insertar (`@CreationTimestamp`, no `CURRENT_TIMESTAMP`, que es la hora de inicio de la transacción) y servidor/BD fijados en `America/Lima` (`KDS_ZONA_HORARIA`, `TZ`) para que todas las PCs usen la hora del servidor (Esc. 6).
   - Historial cargado en una consulta (`@EntityGraph`); ítem o pedido inexistente → 404.
   - Criterio de Aceptación: Escenarios 1 a 6 de HU022; `TrazabilidadServiceTest`; smoke de API/BD 11/11.
+
+- [x] **TASK-054 [FULL] [F1] Envío de Comanda a Cocina (HU009)**
+  - Registrar la comanda es enviarla (D5): pedido `ENVIADO` con `fecha_envio_cocina`, que el comandero muestra como acuse de recibo con código y hora del servidor (Esc. 1).
+  - Idempotencia: `claveIdempotencia` generada por el comandero y restricción `UNIQUE` (migración V8). Un reintento o envíos simultáneos con la misma clave devuelven el mismo pedido (200) sin duplicarlo (Esc. 2 y 5).
+  - La clave solo vale para su autor y su mismo contenido; reutilizarla para otra comanda → 409. `GET /api/v1/pedidos/envio/{clave}` permite al autor verificar si un envío llegó.
+  - Comandero: sin respuesta o con 5xx/502/504 avisa "Sin confirmación del servidor", bloquea la edición (incluido "Limpiar") y ofrece "Reintentar envío" (misma clave) o "Editar comanda", que primero consulta al servidor y, si el envío llegó, muestra el acuse en vez de duplicarlo (Esc. 2). Clave y envío en curso en `useRef` contra doble pulsación (Esc. 5).
+  - Rechazo de platos agotados o dados de baja indicando cuál; el comandero refresca la carta (Esc. 6). Comanda vacía rechazada (Esc. 3). Sin endpoints de edición directa (Esc. 4).
+  - Método HTTP no soportado → 405 y conflicto de integridad → 409 (antes 500).
+  - Criterio de Aceptación: Escenarios 1 a 6 de HU009; `PedidoServiceTest`; `PedidoControllerTest`; smoke API 19/19 y E2E 11/11 (respuesta perdida y 502 tras registrar el pedido).

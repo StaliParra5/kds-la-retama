@@ -3,6 +3,7 @@ package pe.isil.kds.service;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pe.isil.kds.exception.OperacionNoPermitidaException;
 import pe.isil.kds.exception.RecursoNoEncontradoException;
 import pe.isil.kds.dto.CrearPedidoRequest;
 import pe.isil.kds.dto.ItemPedidoRequest;
@@ -23,6 +24,10 @@ import java.util.stream.Collectors;
  * Reglas de Negocio Implementadas:
  * - Si el canal es 'SALON', la selección de mesa es obligatoria (HU006 Escenario 2).
  * - Todo pedido registra un canal de origen existente y activo (HU010 Escenarios 1 y 4).
+ * - Registrar la comanda equivale a enviarla a cocina: queda ENVIADO con hora de envío (HU009, D5).
+ * - Una clave de idempotencia repetida devuelve el pedido ya registrado sin duplicarlo (HU009 Esc. 2 y 5),
+ *   siempre que la use el mismo mozo con el mismo contenido; si no, se rechaza (409).
+ * - Se rechazan platos agotados o dados de baja indicando cuál (HU009 Esc. 6).
  * - Cada comanda recibe un código correlativo único diario secuencial (HU006 Escenario 1).
  * - Calcula subtotales y totales preservando precios unitarios y tiempos estándar en cada detalle.
  * - Normaliza los modificadores de cada ítem: sin espacios sobrantes y nulos si vienen vacíos (HU008).
@@ -56,8 +61,70 @@ public class PedidoService {
         this.messagingTemplate = messagingTemplate;
     }
 
+    /** Resultado de un envío: el pedido y si se creó ahora (201) o ya existía para esa clave (200). */
+    public record ResultadoEnvio(PedidoResponse pedido, boolean creado) {}
+
     @Transactional
     public PedidoResponse crearComanda(CrearPedidoRequest request, String usernameMozo) {
+        return registrarComanda(request, usernameMozo).pedido();
+    }
+
+    @Transactional
+    public ResultadoEnvio registrarComanda(CrearPedidoRequest request, String usernameMozo) {
+        // HU009 Escenarios 2 y 5: lo primero es resolver la clave, antes de cualquier validación,
+        // para que un reintento siempre devuelva el pedido ya registrado
+        if (request.getClaveIdempotencia() != null) {
+            var existente = pedidoRepository.findByClaveIdempotencia(request.getClaveIdempotencia());
+            if (existente.isPresent()) {
+                validarMismoEnvio(existente.get(), request, usernameMozo);
+                return new ResultadoEnvio(convertirADto(existente.get()), false);
+            }
+        }
+        return new ResultadoEnvio(crearComandaNueva(request, usernameMozo), true);
+    }
+
+    /** Resuelve una clave tras perder una carrera de inserción (otra transacción ya la registró). */
+    @Transactional(readOnly = true)
+    public java.util.Optional<PedidoResponse> resolverClaveExistente(CrearPedidoRequest request, String usernameMozo) {
+        return pedidoRepository.findByClaveIdempotencia(request.getClaveIdempotencia()).map(p -> {
+            validarMismoEnvio(p, request, usernameMozo);
+            return convertirADto(p);
+        });
+    }
+
+    /** HU009 Esc. 2: el comandero consulta si un envío sin confirmación llegó al servidor (solo su autor). */
+    @Transactional(readOnly = true)
+    public PedidoResponse consultarEnvio(String clave, String usernameMozo) {
+        return pedidoRepository.findByClaveIdempotencia(clave)
+                .filter(p -> p.getUsuario().getUsername().equals(usernameMozo))
+                .map(this::convertirADto)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No hay ningún envío registrado con esa clave."));
+    }
+
+    private void validarMismoEnvio(Pedido existente, CrearPedidoRequest request, String usernameMozo) {
+        boolean mismoAutor = existente.getUsuario().getUsername().equals(usernameMozo);
+        if (!mismoAutor || !mismoContenido(existente, request)) {
+            throw new OperacionNoPermitidaException("La clave de envío ya fue utilizada para otra comanda.");
+        }
+    }
+
+    private boolean mismoContenido(Pedido existente, CrearPedidoRequest request) {
+        Long mesaExistente = existente.getMesa() != null ? existente.getMesa().getId() : null;
+        boolean mesaIgual = !"SALON".equalsIgnoreCase(existente.getCanal().getCodigo())
+                || java.util.Objects.equals(mesaExistente, request.getMesaId());
+        if (!existente.getCanal().getId().equals(request.getCanalId()) || !mesaIgual) {
+            return false;
+        }
+        List<String> guardados = existente.getItems().stream()
+                .map(i -> i.getPlato().getId() + "|" + i.getCantidad() + "|" + java.util.Objects.toString(i.getModificadores(), ""))
+                .sorted().toList();
+        List<String> recibidos = request.getItems() == null ? List.of() : request.getItems().stream()
+                .map(i -> i.getPlatoId() + "|" + i.getCantidad() + "|" + java.util.Objects.toString(normalizarModificadores(i.getModificadores()), ""))
+                .sorted().toList();
+        return guardados.equals(recibidos);
+    }
+
+    private PedidoResponse crearComandaNueva(CrearPedidoRequest request, String usernameMozo) {
         CanalVenta canal = canalRepository.findById(request.getCanalId())
                 .orElseThrow(() -> new IllegalArgumentException("Canal de venta no encontrado con ID: " + request.getCanalId()));
 
@@ -87,6 +154,7 @@ public class PedidoService {
 
         Pedido pedido = new Pedido();
         pedido.setCodigoCorrelativo(generarCodigoCorrelativo());
+        pedido.setClaveIdempotencia(request.getClaveIdempotencia());
         pedido.setCanal(canal);
         pedido.setMesa(mesa);
         pedido.setUsuario(mozo);
@@ -102,6 +170,13 @@ public class PedidoService {
         for (ItemPedidoRequest itemReq : request.getItems()) {
             Plato plato = platoRepository.findById(itemReq.getPlatoId())
                     .orElseThrow(() -> new IllegalArgumentException("Plato no encontrado con ID: " + itemReq.getPlatoId()));
+            // HU009 Escenario 6: un plato agotado después de agregarse a la comanda impide el envío
+            if (!Boolean.TRUE.equals(plato.getActivo())) {
+                throw new IllegalArgumentException("El plato '" + plato.getNombre() + "' ya no está en la carta. Retírelo de la comanda.");
+            }
+            if (!Boolean.TRUE.equals(plato.getDisponible())) {
+                throw new IllegalArgumentException("El plato '" + plato.getNombre() + "' está agotado. Retírelo de la comanda.");
+            }
 
             DetallePedido detalle = new DetallePedido();
             detalle.setPlato(plato);
@@ -120,7 +195,8 @@ public class PedidoService {
         }
 
         pedido.setTotal(totalAcumulado);
-        Pedido pedidoGuardado = pedidoRepository.save(pedido);
+        // saveAndFlush: una clave de idempotencia duplicada en paralelo falla aquí (restricción UNIQUE)
+        Pedido pedidoGuardado = pedidoRepository.saveAndFlush(pedido);
 
         // Registro de auditoría inicial del pedido y de cada ítem
         trazabilidadService.registrarPedido(pedidoGuardado, null, EstadoPedido.ENVIADO.name(), mozo, "Apertura de comanda");
@@ -217,6 +293,7 @@ public class PedidoService {
         dto.setTotal(pedido.getTotal());
         dto.setObservaciones(pedido.getObservaciones());
         dto.setCreatedAt(pedido.getCreatedAt());
+        dto.setFechaEnvioCocina(pedido.getFechaEnvioCocina());
 
         if (pedido.getItems() != null) {
             dto.setItems(pedido.getItems().stream().map(item -> {

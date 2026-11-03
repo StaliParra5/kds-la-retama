@@ -28,6 +28,10 @@ public class Pedido {
     @Column(name = "codigo_correlativo", nullable = false, unique = true, length = 30)
     private String codigoCorrelativo;
 
+    // Clave de idempotencia del envío desde el comandero (HU009)
+    @Column(name = "clave_idempotencia", unique = true, length = 64, updatable = false)
+    private String claveIdempotencia;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "canal_id", nullable = false, updatable = false)
     private CanalVenta canal;
@@ -79,6 +83,9 @@ public class Pedido {
 
     public String getCodigoCorrelativo() { return codigoCorrelativo; }
     public void setCodigoCorrelativo(String codigoCorrelativo) { this.codigoCorrelativo = codigoCorrelativo; }
+
+    public String getClaveIdempotencia() { return claveIdempotencia; }
+    public void setClaveIdempotencia(String claveIdempotencia) { this.claveIdempotencia = claveIdempotencia; }
 
     public CanalVenta getCanal() { return canal; }
     public void setCanal(CanalVenta canal) {
