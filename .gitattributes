@@ -1,0 +1,8 @@
+# Normalizar finales de línea: el repositorio y las copias de trabajo usan LF
+# (Biome exige LF; core.autocrlf=true en Windows los convertía a CRLF al hacer checkout)
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.png binary
+*.jpg binary
+*.ico binary
