@@ -1,5 +1,6 @@
 // Pantalla de Configuración de Canales de Venta y SLA para La Retama KDS (HU037)
-// Permite al Administrador parametrizar los tiempos objetivo de servicio (SLA > 0) por canal de atención.
+// Permite al Administrador parametrizar los tiempos objetivo de servicio (SLA > 0) por canal de atención
+// y activar o desactivar canales: un canal inactivo no admite pedidos nuevos (HU010 Escenario 4).
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useState } from 'react';
@@ -15,10 +16,10 @@ export const AdminCanalesPage: React.FC = () => {
 
   const [slasEditados, setSlasEditados] = useState<Record<number, number>>({});
 
-  // Consultar canales de venta
+  // Consultar todos los canales de venta, incluidos los inactivos para poder reactivarlos
   const { data: canales = [], isLoading } = useQuery<CanalVenta[]>({
-    queryKey: ['canales'],
-    queryFn: async () => (await apiClient.get('/canales')).data,
+    queryKey: ['canales', 'admin'],
+    queryFn: async () => (await apiClient.get('/canales/todos')).data,
   });
 
   // Mutación para actualizar SLA de canal (HU037)
@@ -29,12 +30,32 @@ export const AdminCanalesPage: React.FC = () => {
     onSuccess: (canalActualizado) => {
       queryClient.invalidateQueries({ queryKey: ['canales'] });
       showToast(
-        `Tiempo SLA para ${canalActualizado.nombre} actualizado a ${canalActualizado.tiempoSlaMinutos} min.`,
+        `Tiempo SLA para ${canalActualizado.nombre} actualizado a ${canalActualizado.slaObjetivoMinutos} min.`,
         'success',
       );
     },
     onError: (err: any) => {
       const msg = err.response?.data?.mensaje || 'Error al actualizar el tiempo SLA del canal.';
+      showToast(msg, 'error');
+    },
+  });
+
+  // Mutación para activar / desactivar canal (HU010)
+  const cambiarEstadoMutation = useMutation({
+    mutationFn: async ({ canalId, activo }: { canalId: number; activo: boolean }) => {
+      return (await apiClient.patch(`/canales/${canalId}/estado`, { activo })).data;
+    },
+    onSuccess: (canalActualizado: CanalVenta) => {
+      queryClient.invalidateQueries({ queryKey: ['canales'] });
+      showToast(
+        canalActualizado.activo
+          ? `Canal ${canalActualizado.nombre} activado: vuelve a recibir pedidos.`
+          : `Canal ${canalActualizado.nombre} desactivado: no recibirá pedidos nuevos.`,
+        canalActualizado.activo ? 'success' : 'info',
+      );
+    },
+    onError: (err: any) => {
+      const msg = err.response?.data?.mensaje || 'Error al cambiar el estado del canal.';
       showToast(msg, 'error');
     },
   });
@@ -99,7 +120,9 @@ export const AdminCanalesPage: React.FC = () => {
               return (
                 <div
                   key={canal.id}
-                  className="bg-surface-container-lowest border border-surface-container-high rounded-2xl p-6 shadow-xs flex flex-col justify-between hover:border-primary/50 transition-all text-left"
+                  className={`bg-surface-container-lowest border border-surface-container-high rounded-2xl p-6 shadow-xs flex flex-col justify-between hover:border-primary/50 transition-all text-left ${
+                    canal.activo ? '' : 'opacity-60'
+                  }`}
                 >
                   <div>
                     <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4">
@@ -117,13 +140,43 @@ export const AdminCanalesPage: React.FC = () => {
                       </span>
                     </div>
 
+                    {/* Estado del canal: un canal inactivo rechaza pedidos nuevos (HU010) */}
+                    <div className="flex items-center justify-between mb-3">
+                      <span
+                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                          canal.activo ? 'bg-primary/10 text-primary' : 'bg-error/10 text-error'
+                        }`}
+                      >
+                        {canal.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={canal.activo}
+                        aria-label={`${canal.activo ? 'Desactivar' : 'Activar'} canal ${canal.nombre}`}
+                        onClick={() =>
+                          cambiarEstadoMutation.mutate({ canalId: canal.id, activo: !canal.activo })
+                        }
+                        disabled={cambiarEstadoMutation.isPending}
+                        className={`relative w-10 h-5 rounded-full transition-colors disabled:opacity-50 cursor-pointer ${
+                          canal.activo ? 'bg-primary' : 'bg-outline-variant'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-xs transition-transform ${
+                            canal.activo ? 'translate-x-5' : ''
+                          }`}
+                        />
+                      </button>
+                    </div>
+
                     <p className="text-xs text-on-surface-variant mb-6">
                       {canal.codigo === 'SALON' &&
                         'Atención presencial en mesas de salón con comanda abierta por mozo.'}
                       {canal.codigo === 'PARA_LLEVAR' &&
                         'Pedidos recogidos en barra o mostrador del restaurante.'}
                       {canal.codigo === 'DELIVERY' &&
-                        'Despacho a repartidores externos para entrega a domicilio.'}
+                        'Reparto a domicilio con repartidores propios del restaurante.'}
                     </p>
 
                     {/* Formulario de SLA */}

@@ -1,9 +1,10 @@
-// Pantalla de Comandero de Sala para La Retama KDS (HU006, HU007 & HU023)
+// Pantalla de Comandero de Sala para La Retama KDS (HU006, HU007, HU008, HU010 & HU023)
 // Basada en Stitch (02 - Comandero y Toma de Pedidos / Culinary Operations Light):
 // - Subheader con selector de Canal de Venta (HU037) y Zonas/Mesas (HU005)
 // - Búsqueda rápida con respuesta instantánea (< 500 ms) y categorías (HU007)
 // - Tarjetas de platos con tiempo estándar de cocina (HU023) y precio en S/
 // - Split View: Catálogo a la izquierda (65%) e Inspector de Comanda a la derecha (35%)
+// - Cantidades y modificadores por línea; un mismo plato admite varias preparaciones (HU008)
 
 import { useQuery } from '@tanstack/react-query';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -13,11 +14,38 @@ import { TopAppBar } from '../components/common/TopAppBar';
 import { useToast } from '../context/ToastContext';
 import type { CanalVenta, CategoriaPlato, ItemComanda, Mesa, Plato, Zona } from '../types';
 
+// Límites de HU008, alineados con las validaciones de ItemPedidoRequest en el backend
+const CANTIDAD_MAXIMA = 50;
+const MODIFICADORES_MAX_CARACTERES = 255;
+const MODIFICADORES_RAPIDOS = ['Sin cebolla', 'Sin ají', 'Poco picante', 'Sin sal'];
+
+// Contador local de líneas (crypto.randomUUID no está disponible por HTTP plano en la LAN)
+let contadorLineas = 0;
+const nuevaLineaId = () => `linea-${++contadorLineas}`;
+
+// Activa o retira un modificador rápido dentro de la nota separada por comas
+const alternarModificador = (actual: string, modificador: string): string => {
+  const partes = actual
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const existe = partes.some((p) => p.toLowerCase() === modificador.toLowerCase());
+  const resultado = existe
+    ? partes.filter((p) => p.toLowerCase() !== modificador.toLowerCase())
+    : [...partes, modificador];
+  return resultado.join(', ');
+};
+
+const tieneModificador = (actual: string | undefined, modificador: string): boolean =>
+  (actual ?? '').split(',').some((p) => p.trim().toLowerCase() === modificador.toLowerCase());
+
 export const ComanderoPage: React.FC = () => {
   const { showToast } = useToast();
 
   // Estado operativo de la comanda en armado
-  const [canalSeleccionado, setCanalSeleccionado] = useState<number>(1); // 1 = Salón
+  const [canalSeleccionado, setCanalSeleccionado] = useState<number | null>(null);
+  // Se activa si el canal elegido fue desactivado: obliga a elegir otro en vez de cambiarlo en silencio
+  const [canalRequiereSeleccion, setCanalRequiereSeleccion] = useState<boolean>(false);
   const [mesaSeleccionada, setMesaSeleccionada] = useState<number | ''>(8);
   const [zonaActiva, setZonaActiva] = useState<number | null>(null);
   const [categoriaActiva, setCategoriaActiva] = useState<number | null>(null);
@@ -30,10 +58,36 @@ export const ComanderoPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Queries de datos maestros al Backend de Spring Boot
-  const { data: canales = [] } = useQuery<CanalVenta[]>({
+  const { data: canales = [], refetch: refetchCanales } = useQuery<CanalVenta[]>({
     queryKey: ['canales'],
     queryFn: async () => (await apiClient.get('/canales')).data,
   });
+
+  // HU010: el canal de la comanda sale del tipo elegido por el mozo; por defecto Salón
+  const canalActual = canalRequiereSeleccion
+    ? undefined
+    : canalSeleccionado !== null
+      ? canales.find((c) => c.id === canalSeleccionado)
+      : (canales.find((c) => c.codigo === 'SALON') ?? canales[0]);
+  const esSalon = canalActual?.codigo === 'SALON';
+
+  // HU010 Escenario 4: si el canal elegido fue desactivado, avisar y exigir una nueva selección
+  useEffect(() => {
+    if (canalSeleccionado === null || canales.length === 0) return;
+    if (!canales.some((c) => c.id === canalSeleccionado)) {
+      setCanalSeleccionado(null);
+      setCanalRequiereSeleccion(true);
+      showToast(
+        'El canal elegido fue desactivado. Seleccione otro canal para la comanda.',
+        'warning',
+      );
+    }
+  }, [canales, canalSeleccionado, showToast]);
+
+  const handleSeleccionarCanal = (canalId: number) => {
+    setCanalSeleccionado(canalId);
+    setCanalRequiereSeleccion(false);
+  };
 
   const { data: zonas = [] } = useQuery<Zona[]>({
     queryKey: ['zonas'],
@@ -88,42 +142,70 @@ export const ComanderoPage: React.FC = () => {
     });
   }, [platos, categoriaActiva, busqueda]);
 
-  // Funciones de gestión del carrito táctil
-  const handleAgregarPlato = (plato: Plato) => {
-    setItemsComanda((prev) => {
-      const idx = prev.findIndex((i) => i.plato.id === plato.id);
-      if (idx >= 0) {
-        const copia = [...prev];
-        copia[idx].cantidad += 1;
-        return copia;
-      }
-      return [...prev, { plato, cantidad: 1, modificadores: '' }];
-    });
-  };
-
-  const handleDecrementarPlato = (platoId: number) => {
-    setItemsComanda((prev) => {
-      const idx = prev.findIndex((i) => i.plato.id === platoId);
-      if (idx >= 0) {
-        if (prev[idx].cantidad > 1) {
-          const copia = [...prev];
-          copia[idx].cantidad -= 1;
-          return copia;
-        }
-        return prev.filter((i) => i.plato.id !== platoId);
-      }
-      return prev;
-    });
-  };
-
-  const handleQuitarPlato = (platoId: number) => {
-    setItemsComanda((prev) => prev.filter((i) => i.plato.id !== platoId));
-  };
-
-  const handleModificadorChange = (platoId: number, mod: string) => {
+  // Funciones de gestión del carrito táctil (actualizaciones inmutables, seguras con StrictMode)
+  const handleIncrementarLinea = (lineaId: string) => {
+    const linea = itemsComanda.find((i) => i.lineaId === lineaId);
+    if (linea && linea.cantidad >= CANTIDAD_MAXIMA) {
+      showToast(`La cantidad máxima por ítem es ${CANTIDAD_MAXIMA}.`, 'warning');
+      return;
+    }
     setItemsComanda((prev) =>
-      prev.map((i) => (i.plato.id === platoId ? { ...i, modificadores: mod } : i)),
+      prev.map((i) =>
+        i.lineaId === lineaId ? { ...i, cantidad: Math.min(i.cantidad + 1, CANTIDAD_MAXIMA) } : i,
+      ),
     );
+  };
+
+  // HU008 Escenario 3: se reutiliza la línea del plato sin modificadores; si todas tienen
+  // modificadores, se abre una línea nueva para que cocina distinga cada preparación.
+  const handleAgregarPlato = (plato: Plato) => {
+    const lineaBase = itemsComanda.find((i) => i.plato.id === plato.id && !i.modificadores?.trim());
+    if (lineaBase) {
+      handleIncrementarLinea(lineaBase.lineaId);
+      return;
+    }
+    setItemsComanda((prev) => [
+      ...prev,
+      { lineaId: nuevaLineaId(), plato, cantidad: 1, modificadores: '' },
+    ]);
+  };
+
+  // HU008 Escenario 1: al bajar de 1 la línea se retira de la comanda
+  const handleDecrementarLinea = (lineaId: string) => {
+    setItemsComanda((prev) =>
+      prev.flatMap((i) => {
+        if (i.lineaId !== lineaId) return [i];
+        return i.cantidad > 1 ? [{ ...i, cantidad: i.cantidad - 1 }] : [];
+      }),
+    );
+  };
+
+  const handleQuitarLinea = (lineaId: string) => {
+    setItemsComanda((prev) => prev.filter((i) => i.lineaId !== lineaId));
+  };
+
+  const handleModificadorChange = (lineaId: string, mod: string) => {
+    setItemsComanda((prev) =>
+      prev.map((i) =>
+        i.lineaId === lineaId
+          ? { ...i, modificadores: mod.slice(0, MODIFICADORES_MAX_CARACTERES) }
+          : i,
+      ),
+    );
+  };
+
+  const handleToggleModificadorRapido = (lineaId: string, modificador: string) => {
+    const linea = itemsComanda.find((i) => i.lineaId === lineaId);
+    if (!linea) return;
+    const nuevo = alternarModificador(linea.modificadores ?? '', modificador);
+    if (nuevo.length > MODIFICADORES_MAX_CARACTERES) {
+      showToast(
+        `La nota de cocina no puede superar los ${MODIFICADORES_MAX_CARACTERES} caracteres.`,
+        'warning',
+      );
+      return;
+    }
+    handleModificadorChange(lineaId, nuevo);
   };
 
   const handleLimpiarComanda = () => {
@@ -141,10 +223,14 @@ export const ComanderoPage: React.FC = () => {
     return Math.max(...itemsComanda.map((i) => i.plato.tiempoEstandarMinutos));
   }, [itemsComanda]);
 
-  // Enviar y abrir comanda en cocina (HU006)
+  // Enviar y abrir comanda en cocina (HU006 & HU010)
   const handleEnviarComanda = async () => {
-    const canalObj = canales.find((c) => c.id === canalSeleccionado);
-    if (canalObj?.codigo === 'SALON' && !mesaSeleccionada) {
+    if (!canalActual) {
+      showToast('Seleccione un canal de venta activo para registrar la comanda.', 'warning');
+      return;
+    }
+
+    if (esSalon && !mesaSeleccionada) {
       showToast('Seleccione una mesa obligatoriamente para pedidos de Salón.', 'warning');
       return;
     }
@@ -157,8 +243,9 @@ export const ComanderoPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       const payload = {
-        canalId: canalSeleccionado,
-        mesaId: mesaSeleccionada || null,
+        canalId: canalActual.id,
+        // La mesa solo aplica a consumo en Salón; Para llevar y Delivery no la arrastran
+        mesaId: esSalon ? mesaSeleccionada || null : null,
         observaciones: observacionesGenerales.trim() || undefined,
         items: itemsComanda.map((item) => ({
           platoId: item.plato.id,
@@ -171,7 +258,7 @@ export const ComanderoPage: React.FC = () => {
       const comandaCreada = res.data;
 
       showToast(
-        `¡Comanda ${comandaCreada.codigoCorrelativo} abierta y enviada a cocina!`,
+        `¡Comanda ${comandaCreada.codigoCorrelativo} (${comandaCreada.canalNombre}) abierta y enviada a cocina!`,
         'success',
       );
       handleLimpiarComanda();
@@ -179,6 +266,10 @@ export const ComanderoPage: React.FC = () => {
     } catch (err: any) {
       const msg = err.response?.data?.mensaje || 'Error al enviar la comanda al servidor KDS.';
       showToast(msg, 'error');
+      // HU010 Escenario 4: el canal pudo desactivarse mientras se armaba la comanda
+      if (err.response?.status === 400) {
+        refetchCanales();
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -199,12 +290,12 @@ export const ComanderoPage: React.FC = () => {
             </span>
             <div className="flex items-center gap-1 bg-surface-container-low p-1 rounded-lg border border-surface-container-high">
               {canales.map((canal) => {
-                const activo = canal.id === canalSeleccionado;
+                const activo = canal.id === canalActual?.id;
                 return (
                   <button
                     key={canal.id}
                     type="button"
-                    onClick={() => setCanalSeleccionado(canal.id)}
+                    onClick={() => handleSeleccionarCanal(canal.id)}
                     className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
                       activo
                         ? 'bg-primary text-on-primary shadow-xs'
@@ -222,7 +313,7 @@ export const ComanderoPage: React.FC = () => {
           </div>
 
           {/* Selección de Mesas y Zonas (HU005) - visible si es Salón */}
-          {canales.find((c) => c.id === canalSeleccionado)?.codigo === 'SALON' && (
+          {esSalon && (
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
                 <span className="material-symbols-outlined text-[16px]">table_restaurant</span>
@@ -352,16 +443,19 @@ export const ComanderoPage: React.FC = () => {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {platosFiltrados.map((plato) => {
-                const enCarrito = itemsComanda.find((i) => i.plato.id === plato.id);
+                // Suma todas las líneas del plato (puede haber varias con modificadores distintos)
+                const cantidadEnCarrito = itemsComanda
+                  .filter((i) => i.plato.id === plato.id)
+                  .reduce((acc, i) => acc + i.cantidad, 0);
                 return (
                   <div
                     key={plato.id}
                     className="bg-surface-container-lowest border border-surface-container-high rounded-xl p-3.5 flex flex-col justify-between shadow-xs hover:border-primary/50 hover:shadow-md transition-all text-left relative overflow-hidden group"
                   >
                     {/* Indicador de cantidad en carrito si ya fue agregado */}
-                    {enCarrito && (
+                    {cantidadEnCarrito > 0 && (
                       <span className="absolute top-2 right-2 bg-primary text-on-primary text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
-                        {enCarrito.cantidad}
+                        {cantidadEnCarrito}
                       </span>
                     )}
 
@@ -419,8 +513,8 @@ export const ComanderoPage: React.FC = () => {
                 </span>
               </div>
               <p className="text-[11px] font-medium text-on-surface-variant mt-0.5">
-                {canales.find((c) => c.id === canalSeleccionado)?.nombre} •{' '}
-                {mesaSeleccionada ? `Mesa 0${mesaSeleccionada}` : 'Sin mesa'}
+                {canalActual?.nombre ?? 'Sin canal'} •{' '}
+                {esSalon && mesaSeleccionada ? `Mesa 0${mesaSeleccionada}` : 'Sin mesa'}
               </p>
             </div>
 
@@ -452,7 +546,7 @@ export const ComanderoPage: React.FC = () => {
             ) : (
               itemsComanda.map((item) => (
                 <div
-                  key={item.plato.id}
+                  key={item.lineaId}
                   className="bg-surface-container-low/70 border border-surface-container-high rounded-xl p-3 flex flex-col gap-2 shadow-2xs"
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -470,20 +564,50 @@ export const ComanderoPage: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Campo de Modificadores por Ítem ("Sin cebolla", "Término medio") */}
-                  <input
-                    type="text"
-                    value={item.modificadores || ''}
-                    onChange={(e) => handleModificadorChange(item.plato.id, e.target.value)}
-                    placeholder="Nota de cocina (ej. Sin ají, término 3/4)..."
-                    className="w-full bg-surface-container-lowest text-[11px] px-2.5 py-1.5 rounded-md border border-surface-container-high placeholder:text-outline/70 focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
+                  {/* Campo de Modificadores por Ítem ("Sin cebolla", "Término medio") (HU008) */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={item.modificadores || ''}
+                      maxLength={MODIFICADORES_MAX_CARACTERES}
+                      onChange={(e) => handleModificadorChange(item.lineaId, e.target.value)}
+                      placeholder="Nota de cocina (ej. Sin ají, término 3/4)..."
+                      className="w-full bg-surface-container-lowest text-[11px] pl-2.5 pr-14 py-1.5 rounded-md border border-surface-container-high placeholder:text-outline/70 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    {(item.modificadores?.length ?? 0) > 0 && (
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-mono text-outline">
+                        {item.modificadores?.length}/{MODIFICADORES_MAX_CARACTERES}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Modificadores rápidos táctiles: un toque agrega, otro toque retira */}
+                  <div className="flex flex-wrap gap-1">
+                    {MODIFICADORES_RAPIDOS.map((mod) => {
+                      const activo = tieneModificador(item.modificadores, mod);
+                      return (
+                        <button
+                          key={mod}
+                          type="button"
+                          onClick={() => handleToggleModificadorRapido(item.lineaId, mod)}
+                          aria-pressed={activo}
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
+                            activo
+                              ? 'bg-primary text-on-primary border-primary'
+                              : 'bg-surface-container-lowest text-on-surface-variant border-surface-container-high hover:border-primary/50'
+                          }`}
+                        >
+                          {mod}
+                        </button>
+                      );
+                    })}
+                  </div>
 
                   {/* Controles de Cantidad (+ / -) y Quitar */}
                   <div className="flex items-center justify-between pt-1">
                     <button
                       type="button"
-                      onClick={() => handleQuitarPlato(item.plato.id)}
+                      onClick={() => handleQuitarLinea(item.lineaId)}
                       className="text-on-surface-variant hover:text-error p-1"
                       title="Quitar plato"
                     >
@@ -493,7 +617,7 @@ export const ComanderoPage: React.FC = () => {
                     <div className="flex items-center gap-2 bg-surface-container-lowest rounded-lg border border-surface-container-high px-2 py-0.5">
                       <button
                         type="button"
-                        onClick={() => handleDecrementarPlato(item.plato.id)}
+                        onClick={() => handleDecrementarLinea(item.lineaId)}
                         className="w-6 h-6 flex items-center justify-center text-on-surface hover:bg-surface-container rounded"
                       >
                         <span className="material-symbols-outlined text-[14px]">remove</span>
@@ -503,8 +627,9 @@ export const ComanderoPage: React.FC = () => {
                       </span>
                       <button
                         type="button"
-                        onClick={() => handleAgregarPlato(item.plato)}
-                        className="w-6 h-6 flex items-center justify-center text-on-surface hover:bg-surface-container rounded"
+                        onClick={() => handleIncrementarLinea(item.lineaId)}
+                        disabled={item.cantidad >= CANTIDAD_MAXIMA}
+                        className="w-6 h-6 flex items-center justify-center text-on-surface hover:bg-surface-container rounded disabled:opacity-40"
                       >
                         <span className="material-symbols-outlined text-[14px]">add</span>
                       </button>

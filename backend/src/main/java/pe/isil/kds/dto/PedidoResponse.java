@@ -12,6 +12,7 @@ public class PedidoResponse {
     private Long canalId;
     private String canalCodigo;
     private String canalNombre;
+    private Integer canalSlaMinutos;
     private Long mesaId;
     private String mesaNumero;
     private String usuarioNombre;
@@ -39,6 +40,9 @@ public class PedidoResponse {
 
     public String getCanalNombre() { return canalNombre; }
     public void setCanalNombre(String canalNombre) { this.canalNombre = canalNombre; }
+
+    public Integer getCanalSlaMinutos() { return canalSlaMinutos; }
+    public void setCanalSlaMinutos(Integer canalSlaMinutos) { this.canalSlaMinutos = canalSlaMinutos; }
 
     public Long getMesaId() { return mesaId; }
     public void setMesaId(Long mesaId) { this.mesaId = mesaId; }

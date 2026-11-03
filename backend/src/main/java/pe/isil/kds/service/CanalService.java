@@ -11,7 +11,8 @@ import java.util.stream.Collectors;
 
 /**
  * Servicio de Canales de Venta y SLAs (RF-CFG-04).
- * Permite configurar los tiempos SLA por canal para semaforización en KDS.
+ * Permite configurar los tiempos SLA por canal para semaforización en KDS
+ * y activar o desactivar canales para la recepción de pedidos (HU010).
  */
 @Service
 public class CanalService {
@@ -23,10 +24,19 @@ public class CanalService {
     }
 
     @Transactional(readOnly = true)
-    public List<CanalDto> listarCanales() {
-        return canalRepository.findByActivoTrue().stream()
-                .map(c -> new CanalDto(c.getId(), c.getCodigo(), c.getNombre(), c.getSlaObjetivoMinutos(), c.getActivo()))
-                .collect(Collectors.toList());
+    public List<CanalDto> listarCanales(boolean incluirInactivos) {
+        List<CanalVenta> canales = incluirInactivos
+                ? canalRepository.findAllByOrderByIdAsc()
+                : canalRepository.findByActivoTrueOrderByIdAsc();
+        return canales.stream().map(this::convertirADto).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public CanalDto cambiarEstado(Long canalId, boolean activo) {
+        CanalVenta canal = canalRepository.findById(canalId)
+                .orElseThrow(() -> new IllegalArgumentException("Canal no encontrado con ID: " + canalId));
+        canal.setActivo(activo);
+        return convertirADto(canalRepository.save(canal));
     }
 
     @Transactional
@@ -39,8 +49,10 @@ public class CanalService {
                 .orElseThrow(() -> new IllegalArgumentException("Canal no encontrado con ID: " + canalId));
 
         canal.setSlaObjetivoMinutos(nuevoSla);
-        CanalVenta actualizado = canalRepository.save(canal);
+        return convertirADto(canalRepository.save(canal));
+    }
 
-        return new CanalDto(actualizado.getId(), actualizado.getCodigo(), actualizado.getNombre(), actualizado.getSlaObjetivoMinutos(), actualizado.getActivo());
+    private CanalDto convertirADto(CanalVenta c) {
+        return new CanalDto(c.getId(), c.getCodigo(), c.getNombre(), c.getSlaObjetivoMinutos(), c.getActivo());
     }
 }

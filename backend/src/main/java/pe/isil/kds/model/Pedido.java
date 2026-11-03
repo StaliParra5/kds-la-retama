@@ -2,6 +2,8 @@ package pe.isil.kds.model;
 
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
+import pe.isil.kds.exception.OperacionNoPermitidaException;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -12,6 +14,7 @@ import java.util.List;
  * 
  * Reglas de Dominio:
  * - Si canal.codigo == 'SALON', la asociación con 'mesa' es obligatoria (HU006).
+ * - El canal de origen es inmutable una vez registrado el pedido (HU010 Escenario 5).
  * - Se inicializa con estado 'BORRADOR' en sala hasta que el mozo envía la orden a cocina.
  */
 @Entity
@@ -26,7 +29,7 @@ public class Pedido {
     private String codigoCorrelativo;
 
     @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "canal_id", nullable = false)
+    @JoinColumn(name = "canal_id", nullable = false, updatable = false)
     private CanalVenta canal;
 
     @ManyToOne(fetch = FetchType.EAGER)
@@ -77,7 +80,16 @@ public class Pedido {
     public void setCodigoCorrelativo(String codigoCorrelativo) { this.codigoCorrelativo = codigoCorrelativo; }
 
     public CanalVenta getCanal() { return canal; }
-    public void setCanal(CanalVenta canal) { this.canal = canal; }
+    public void setCanal(CanalVenta canal) {
+        if (this.id != null && this.canal != null && !mismoCanal(canal)) {
+            throw new OperacionNoPermitidaException("El canal de origen de un pedido registrado no puede modificarse.");
+        }
+        this.canal = canal;
+    }
+
+    private boolean mismoCanal(CanalVenta otro) {
+        return otro != null && otro.getId() != null && otro.getId().equals(this.canal.getId());
+    }
 
     public Mesa getMesa() { return mesa; }
     public void setMesa(Mesa mesa) { this.mesa = mesa; }

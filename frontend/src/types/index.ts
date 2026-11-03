@@ -78,6 +78,8 @@ export interface Plato {
 }
 
 export interface ItemComanda {
+  // Identificador local de la línea: un mismo plato puede repetirse con modificadores distintos (HU008)
+  lineaId: string;
   plato: Plato;
   cantidad: number;
   modificadores?: string;
@@ -103,6 +105,7 @@ export interface PedidoResponse {
   canalId: number;
   canalCodigo: string;
   canalNombre: string;
+  canalSlaMinutos: number;
   mesaId?: number | null;
   mesaNumero?: string | null;
   usuarioNombre: string;

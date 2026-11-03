@@ -49,6 +49,19 @@ El sistema KDS (Kitchen Display System) es una solución modular cliente-servido
 - **HU007 - Agregar ítems desde la carta digital (RF-CAP-02)** [Peso: 720 | F1]
 - **Setup QA / DevOps:** Setup Maven Spring Boot + Vite React MUI + Docker Compose PostgreSQL 16 + Flyway + Empaquetado embebido.
 
+### 3.2 Historias de Usuario Incluidas (Sprint 2 - Jira KDSG5 Sprint 2)
+- **HU008 - Indicar cantidades y modificadores** (KDSG5-8)
+- **HU009 - Enviar comanda a cocina** (KDSG5-9)
+- **HU010 - Registrar el canal de origen** (KDSG5-10)
+- **HU011 - Enrutar ítems por estación** (KDSG5-11)
+- **HU012 - Ver solo los ítems de mi estación** (KDSG5-12)
+- **HU013 - Ciclo de vida del ítem** (KDSG5-13)
+- **HU014 - Cambiar estado con un toque** (KDSG5-14)
+- **HU022 - Trazabilidad de transiciones** (KDSG5-22)
+- **HU030 - Marcar platos agotados** (KDSG5-30)
+- **HU031 - Agregar ítems a comanda enviada** (KDSG5-31)
+- **HU032 - Anular ítem con motivo** (KDSG5-32)
+
 ---
 
 ## 4. Requerimientos Funcionales y Criterios de Aceptación (BDD)
@@ -171,6 +184,76 @@ El sistema KDS (Kitchen Display System) es una solución modular cliente-servido
   - **Given** las categorías "Entradas", "Fondos", "Bebidas", "Postres"
   - **When** el mozo selecciona "Fondos" y presiona "+" en "Lomo Saltado"
   - **Then** el ítem se suma al panel lateral de resumen con su cantidad y subtotal actualizados.
+
+---
+
+### RF-CAP-03 / HU008: Indicar cantidades y modificadores (Sprint 2 - KDSG5-8)
+*Como mozo, quiero indicar la cantidad y los modificadores predefinidos de cada ítem, para que cocina prepare exactamente lo que pidió el cliente.*
+
+- **Escenario 1 (Modificador destacado):**
+  - **Given** un plato con modificadores
+  - **When** el mozo pide 3 unidades con "sin cebolla"
+  - **Then** la cocina ve la cantidad y el modificador resaltado.
+
+- **Escenario 2 (Plato sin modificadores):**
+  - **Given** un plato sin modificadores configurados
+  - **When** el mozo lo agrega
+  - **Then** solo puede indicar la cantidad.
+
+- **Escenario 3 (Cantidad válida):**
+  - **Given** un ítem en la comanda
+  - **When** el mozo indica cantidad 0 o un valor negativo
+  - **Then** el sistema no lo acepta.
+
+- **Escenario 4 (Varios modificadores):**
+  - **Given** un plato con modificadores
+  - **When** el mozo selecciona "sin cebolla" y "término medio"
+  - **Then** ambos se muestran en cocina junto al ítem.
+
+- **Escenario 5 (Mismo plato con modificadores distintos):**
+  - **Given** dos lomos saltados, uno normal y otro "sin cebolla"
+  - **When** el mozo los agrega
+  - **Then** se registran como dos ítems separados.
+
+- **Escenario 6 (Editar antes de enviar):**
+  - **Given** una comanda aún no enviada
+  - **When** el mozo cambia la cantidad o quita un modificador
+  - **Then** el cambio se refleja en el resumen de la comanda.
+
+---
+
+### RF-ING-01 / HU010: Registrar el canal de origen (Sprint 2 - KDSG5-10)
+*Como administrador, quiero que todo pedido registre obligatoriamente su canal de origen, para medir tiempos y cumplimiento del SLA por canal.*
+
+- **Escenario 1 (Validación en servidor):**
+  - **Given** un pedido sin canal
+  - **When** se intenta persistir
+  - **Then** el servidor lo rechaza.
+
+- **Escenario 2 (Asignación automática):**
+  - **Given** una comanda creada en el comandero
+  - **When** se envía
+  - **Then** el canal se asigna según el tipo de comanda.
+
+- **Escenario 3 (Canal según tipo de comanda):**
+  - **Given** comandas de salón, para llevar y delivery propio
+  - **When** se envían
+  - **Then** quedan con el canal Salón, Para llevar y Delivery propio respectivamente.
+
+- **Escenario 4 (Canal inactivo):**
+  - **Given** un canal desactivado por el administrador
+  - **When** llega un pedido con ese canal
+  - **Then** el servidor lo rechaza e indica que el canal no está activo.
+
+- **Escenario 5 (Canal inmutable):**
+  - **Given** un pedido ya registrado
+  - **When** se intenta cambiar su canal
+  - **Then** el sistema no lo permite.
+
+- **Escenario 6 (Canal visible en el detalle):**
+  - **Given** un pedido registrado
+  - **When** se consulta su detalle
+  - **Then** muestra su canal de origen.
 
 ---
 

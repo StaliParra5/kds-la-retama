@@ -1,7 +1,9 @@
 package pe.isil.kds.dto;
 
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 public class ItemPedidoRequest {
 
@@ -10,8 +12,10 @@ public class ItemPedidoRequest {
 
     @NotNull(message = "La cantidad es requerida")
     @Min(value = 1, message = "La cantidad mínima debe ser 1")
+    @Max(value = 50, message = "La cantidad máxima por ítem es 50")
     private Integer cantidad;
 
+    @Size(max = 255, message = "Los modificadores no pueden superar los 255 caracteres")
     private String modificadores;
 
     public ItemPedidoRequest() {}

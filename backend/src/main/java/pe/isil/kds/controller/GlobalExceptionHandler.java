@@ -8,6 +8,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import pe.isil.kds.exception.OperacionNoPermitidaException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -37,6 +38,11 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, "Solicitud inválida", ex.getMessage());
     }
 
+    @ExceptionHandler(OperacionNoPermitidaException.class)
+    public ResponseEntity<Map<String, Object>> handleOperacionNoPermitida(OperacionNoPermitidaException ex) {
+        return buildResponse(HttpStatus.CONFLICT, "Operación no permitida", ex.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationErrors(MethodArgumentNotValidException ex) {
         Map<String, String> errores = new HashMap<>();
@@ -49,6 +55,9 @@ public class GlobalExceptionHandler {
         body.put("status", HttpStatus.BAD_REQUEST.value());
         body.put("error", "Error de validación de campos");
         body.put("detalles", errores);
+        // Primer error en formato legible para mostrar directamente en los toasts del frontend
+        ex.getBindingResult().getFieldErrors().stream().findFirst()
+                .ifPresent(fieldError -> body.put("mensaje", fieldError.getDefaultMessage()));
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }

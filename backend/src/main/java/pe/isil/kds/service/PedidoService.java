@@ -21,8 +21,10 @@ import java.util.stream.Collectors;
  * 
  * Reglas de Negocio Implementadas:
  * - Si el canal es 'SALON', la selección de mesa es obligatoria (HU006 Escenario 2).
+ * - Todo pedido registra un canal de origen existente y activo (HU010 Escenarios 1 y 4).
  * - Cada comanda recibe un código correlativo único diario secuencial (HU006 Escenario 1).
  * - Calcula subtotales y totales preservando precios unitarios y tiempos estándar en cada detalle.
+ * - Normaliza los modificadores de cada ítem: sin espacios sobrantes y nulos si vienen vacíos (HU008).
  * - Registra la transición inicial de estado en la tabla inmutable para trazabilidad.
  */
 @Service
@@ -57,6 +59,11 @@ public class PedidoService {
     public PedidoResponse crearComanda(CrearPedidoRequest request, String usernameMozo) {
         CanalVenta canal = canalRepository.findById(request.getCanalId())
                 .orElseThrow(() -> new IllegalArgumentException("Canal de venta no encontrado con ID: " + request.getCanalId()));
+
+        // HU010 Escenario 4: un canal desactivado por el administrador no admite pedidos nuevos
+        if (!Boolean.TRUE.equals(canal.getActivo())) {
+            throw new IllegalArgumentException("El canal de venta '" + canal.getNombre() + "' no está activo.");
+        }
 
         // HU006 Escenario 2: Validación de mesa obligatoria en consumo de Salón
         Mesa mesa = null;
@@ -101,7 +108,7 @@ public class PedidoService {
             detalle.setPrecioUnitario(plato.getPrecio());
             BigDecimal subtotal = plato.getPrecio().multiply(BigDecimal.valueOf(itemReq.getCantidad()));
             detalle.setSubtotal(subtotal);
-            detalle.setModificadores(itemReq.getModificadores());
+            detalle.setModificadores(normalizarModificadores(itemReq.getModificadores()));
             detalle.setTiempoEstandarMinutos(plato.getTiempoEstandarMinutos());
             detalle.setEstadoItem("RECIBIDO");
 
@@ -184,6 +191,13 @@ public class PedidoService {
         return candidato;
     }
 
+    private String normalizarModificadores(String modificadores) {
+        if (modificadores == null || modificadores.isBlank()) {
+            return null;
+        }
+        return modificadores.trim();
+    }
+
     private PedidoResponse convertirADto(Pedido pedido) {
         PedidoResponse dto = new PedidoResponse();
         dto.setId(pedido.getId());
@@ -191,6 +205,7 @@ public class PedidoService {
         dto.setCanalId(pedido.getCanal().getId());
         dto.setCanalCodigo(pedido.getCanal().getCodigo());
         dto.setCanalNombre(pedido.getCanal().getNombre());
+        dto.setCanalSlaMinutos(pedido.getCanal().getSlaObjetivoMinutos());
         if (pedido.getMesa() != null) {
             dto.setMesaId(pedido.getMesa().getId());
             dto.setMesaNumero(pedido.getMesa().getNumeroMesa());

@@ -9,5 +9,6 @@ import java.util.Optional;
 @Repository
 public interface CanalVentaRepository extends JpaRepository<CanalVenta, Long> {
     Optional<CanalVenta> findByCodigo(String codigo);
-    List<CanalVenta> findByActivoTrue();
+    List<CanalVenta> findByActivoTrueOrderByIdAsc();
+    List<CanalVenta> findAllByOrderByIdAsc();
 }

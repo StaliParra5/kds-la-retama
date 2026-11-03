@@ -225,3 +225,23 @@
   - Verificación del empaquetado multi-etapa con Maven (`./mvnw clean package -DskipTests=false`).
   - Validación en vivo en navegador de todas las pantallas reemplazadas.
 
+---
+
+## Fase 5: Sprint 2 - Flujo de Comanda hacia Cocina
+
+- [ ] **TASK-050 [FULL] [F1] Cantidades y Modificadores por Ítem (HU008)** — parcial
+  - [x] Backend: límites de cantidad (1 a 50) y modificadores (máx. 255 caracteres) en `ItemPedidoRequest`; normalización de modificadores en `PedidoService` (Esc. 3).
+  - [x] Backend: respuesta 400 de validación con campo `mensaje` legible por el frontend.
+  - [x] Frontend: carrito por línea (mismo plato con modificadores distintos en líneas separadas) y actualizaciones inmutables del estado (Esc. 5 y 6).
+  - [ ] Modificadores predefinidos por plato: catálogo administrable; un plato sin modificadores configurados solo admite cantidad (Esc. 1, 2 y 4). Hoy los chips son una lista genérica fija.
+  - [ ] Resaltado del modificador en la pantalla de cocina (depende de HU012).
+
+- [x] **TASK-051 [FULL] [B2] Registro del Canal de Origen (HU010)**
+  - Backend: rechazo de pedidos con canal inactivo en `PedidoService` (Esc. 4); canal obligatorio ya validado por `@NotNull` y `NOT NULL` (Esc. 1).
+  - Backend: canal inmutable en `Pedido` (`updatable = false` + guarda en `setCanal`) con `OperacionNoPermitidaException` mapeada a 409 (Esc. 5).
+  - Backend: `PATCH /api/v1/canales/{id}/estado` y `GET /api/v1/canales/todos` (solo Admin); listado de canales activos ordenado; `canalSlaMinutos` en `PedidoResponse` (Esc. 6).
+  - Migración `V5__canal_delivery_propio.sql`: el canal `DELIVERY` pasa a llamarse "Delivery propio" (Esc. 3).
+  - Frontend: comandero elige Salón por código (no por ID fijo), no envía mesa fuera de Salón y, si el canal elegido se desactiva, avisa y exige elegir otro en vez de cambiarlo en silencio (Esc. 2 a 4).
+  - Frontend: interruptor Activo/Inactivo por canal en administración y corrección del SLA mostrado en el aviso de guardado.
+  - Criterio de Aceptación: Escenarios 1 a 6 de HU010; pruebas en `PedidoServiceTest` y `CanalServiceTest`.
+

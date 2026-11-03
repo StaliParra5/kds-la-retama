@@ -11,6 +11,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import pe.isil.kds.dto.CrearPedidoRequest;
 import pe.isil.kds.dto.ItemPedidoRequest;
 import pe.isil.kds.dto.PedidoResponse;
+import pe.isil.kds.exception.OperacionNoPermitidaException;
 import pe.isil.kds.model.*;
 import pe.isil.kds.repository.*;
 import pe.isil.kds.service.PedidoService;
@@ -22,6 +23,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -163,5 +165,103 @@ class PedidoServiceTest {
 
         assertNotNull(response);
         assertTrue(response.getCodigoCorrelativo().endsWith("-0008"));
+    }
+
+    @Test
+    @DisplayName("HU008 Escenario 3: Mismo plato con modificadores distintos se registra en detalles independientes")
+    void crearComanda_MismoPlatoModificadoresDistintos_DetallesSeparados() {
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(1L);
+        req.setMesaId(8L);
+        req.setItems(List.of(
+                new ItemPedidoRequest(50L, 1, "Término medio"),
+                new ItemPedidoRequest(50L, 2, "Bien cocido")));
+
+        prepararAperturaValida();
+
+        PedidoResponse response = pedidoService.crearComanda(req, "angie");
+
+        assertEquals(2, response.getItems().size());
+        assertEquals("Término medio", response.getItems().get(0).getModificadores());
+        assertEquals(1, response.getItems().get(0).getCantidad());
+        assertEquals("Bien cocido", response.getItems().get(1).getModificadores());
+        assertEquals(2, response.getItems().get(1).getCantidad());
+        assertEquals(new BigDecimal("96.00"), response.getTotal());
+    }
+
+    @Test
+    @DisplayName("HU008 Escenario 4: Modificadores se guardan sin espacios sobrantes y vacíos como nulos")
+    void crearComanda_ModificadoresNormalizados() {
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(1L);
+        req.setMesaId(8L);
+        req.setItems(List.of(
+                new ItemPedidoRequest(50L, 1, "  Sin cebolla  "),
+                new ItemPedidoRequest(50L, 1, "   ")));
+
+        prepararAperturaValida();
+
+        PedidoResponse response = pedidoService.crearComanda(req, "angie");
+
+        assertEquals("Sin cebolla", response.getItems().get(0).getModificadores());
+        assertNull(response.getItems().get(1).getModificadores());
+    }
+
+    @Test
+    @DisplayName("HU010 Escenario 4: Pedido con canal desactivado es rechazado indicando que no está activo")
+    void crearComanda_CanalInactivo_EsRechazado() {
+        canalDelivery.setActivo(false);
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(2L);
+        req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
+
+        when(canalRepository.findById(2L)).thenReturn(Optional.of(canalDelivery));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+                pedidoService.crearComanda(req, "angie"));
+
+        assertTrue(ex.getMessage().contains("no está activo"));
+        verify(pedidoRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("HU010 Escenarios 3 y 6: El pedido queda con el canal de origen y su SLA visibles en el detalle")
+    void crearComanda_CanalVisibleEnDetalle() {
+        canalSalon.setSlaObjetivoMinutos(15);
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(1L);
+        req.setMesaId(8L);
+        req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
+
+        prepararAperturaValida();
+
+        PedidoResponse response = pedidoService.crearComanda(req, "angie");
+
+        assertEquals(1L, response.getCanalId());
+        assertEquals("SALON", response.getCanalCodigo());
+        assertEquals("Salón", response.getCanalNombre());
+        assertEquals(15, response.getCanalSlaMinutos());
+    }
+
+    @Test
+    @DisplayName("HU010 Escenario 5: El canal de un pedido ya registrado no puede modificarse")
+    void pedidoRegistrado_CambioDeCanal_NoPermitido() {
+        Pedido pedido = new Pedido();
+        pedido.setCanal(canalSalon);
+        pedido.setId(99L);
+
+        assertThrows(OperacionNoPermitidaException.class, () -> pedido.setCanal(canalDelivery));
+        assertEquals("SALON", pedido.getCanal().getCodigo());
+        // Reasignar el mismo canal no es un cambio y se permite
+        assertDoesNotThrow(() -> pedido.setCanal(canalSalon));
+    }
+
+    private void prepararAperturaValida() {
+        when(canalRepository.findById(1L)).thenReturn(Optional.of(canalSalon));
+        when(mesaRepository.findById(8L)).thenReturn(Optional.of(mesa08));
+        when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
+        when(platoRepository.findById(anyLong())).thenReturn(Optional.of(plato));
+        when(pedidoRepository.obtenerSiguienteValorSecuencia()).thenReturn(1L);
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 }
