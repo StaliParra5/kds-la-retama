@@ -15,6 +15,7 @@ import pe.isil.kds.exception.OperacionNoPermitidaException;
 import pe.isil.kds.model.*;
 import pe.isil.kds.repository.*;
 import pe.isil.kds.service.PedidoService;
+import pe.isil.kds.service.TrazabilidadService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -24,6 +25,9 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,7 +49,7 @@ class PedidoServiceTest {
     private UsuarioRepository usuarioRepository;
 
     @Mock
-    private TransicionEstadoRepository transicionRepository;
+    private TrazabilidadService trazabilidadService;
 
     @Mock
     private SimpMessagingTemplate messagingTemplate;
@@ -141,7 +145,12 @@ class PedidoServiceTest {
         assertEquals(1, response.getItems().size());
         assertEquals("Lomo Saltado", response.getItems().get(0).getPlatoNombre());
 
-        verify(transicionRepository, times(1)).save(any(TransicionEstado.class));
+        verify(trazabilidadService, times(1)).registrarPedido(any(Pedido.class), isNull(), eq("ENVIADO"), eq(mozo), anyString());
+        // HU013 Escenario 3: cada ítem se registra en estado RECIBIDO
+        verify(trazabilidadService, times(1)).registrarItem(any(DetallePedido.class), isNull(), eq("RECIBIDO"), eq(mozo), isNull());
+        assertEquals("ENVIADO", response.getEstado());
+        assertNotNull(response.getCreatedAt());
+        assertEquals("RECIBIDO", response.getItems().get(0).getEstadoItem());
     }
 
     @Test

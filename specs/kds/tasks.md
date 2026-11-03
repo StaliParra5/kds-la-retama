@@ -245,3 +245,13 @@
   - Frontend: interruptor Activo/Inactivo por canal en administración y corrección del SLA mostrado en el aviso de guardado.
   - Criterio de Aceptación: Escenarios 1 a 6 de HU010; pruebas en `PedidoServiceTest` y `CanalServiceTest`.
 
+
+- [x] **TASK-052 [BE] [B1] Ciclo de Vida del Ítem (HU013)**
+  - Enums `EstadoItem` (flujo y transiciones válidas, estados finales) y `EstadoPedido` (derivado del estado de los ítems).
+  - `PATCH /api/v1/items/{id}/estado` con `estadoActual` + `estadoDestino`; 409 con el ítem vigente si el estado cambió (Esc. 6), también ante carreras reales detectadas por `@Version`.
+  - Roles (D8): cocinero inicia/marca listo solo en la estación vinculada (claim `estacionId` en el JWT del login por PIN; sin estación vinculada no opera); expedidor y admin despachan. El permiso se valida antes que el estado.
+  - El pedido se bloquea (`SELECT … FOR UPDATE`) al cambiar un ítem, para que cambios simultáneos en ítems distintos no dejen su estado agregado desactualizado; `fecha_envio_cocina` se registra al crear la comanda.
+  - Migración `V6__ciclo_vida_item.sql`: `CHECK` de estados, columna `version`, `hora_disparo`; `BORRADOR` migrado a `ENVIADO`.
+  - Notificación por WebSocket tras el commit (`/topic/estacion/{id}`, `/topic/items`) con `NotificadorKds`.
+  - Errores: cuerpo ilegible → 400 y ruta inexistente → 404 (antes 500).
+  - Criterio de Aceptación: Escenarios 1 a 6 de HU013; `EstadoItemTest`, `CicloVidaItemServiceTest`; smoke de API 17/17 con carreras simultáneas reales (mismo ítem y dos ítems del mismo pedido).

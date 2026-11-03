@@ -35,6 +35,10 @@ public class JwtTokenProvider {
     }
 
     public String generateToken(Long usuarioId, String username, String role) {
+        return generateToken(usuarioId, username, role, null);
+    }
+
+    public String generateToken(Long usuarioId, String username, String role, Long estacionId) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationMs);
 
@@ -42,6 +46,7 @@ public class JwtTokenProvider {
                 .subject(username)
                 .claim("usuarioId", usuarioId)
                 .claim("role", role)
+                .claim("estacionId", estacionId)
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(secretKey)
@@ -69,6 +74,14 @@ public class JwtTokenProvider {
     public String getRoleFromToken(String token) {
         Claims claims = getClaims(token);
         return claims.get("role", String.class);
+    }
+
+    public Long getEstacionIdFromToken(String token) {
+        Object id = getClaims(token).get("estacionId");
+        if (id instanceof Number number) {
+            return number.longValue();
+        }
+        return null;
     }
 
     public Long getUsuarioIdFromToken(String token) {

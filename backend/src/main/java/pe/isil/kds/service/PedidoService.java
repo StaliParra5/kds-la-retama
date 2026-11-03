@@ -35,7 +35,7 @@ public class PedidoService {
     private final MesaRepository mesaRepository;
     private final PlatoRepository platoRepository;
     private final UsuarioRepository usuarioRepository;
-    private final TransicionEstadoRepository transicionRepository;
+    private final TrazabilidadService trazabilidadService;
     private final SimpMessagingTemplate messagingTemplate;
 
     public PedidoService(
@@ -44,14 +44,14 @@ public class PedidoService {
             MesaRepository mesaRepository,
             PlatoRepository platoRepository,
             UsuarioRepository usuarioRepository,
-            TransicionEstadoRepository transicionRepository,
+            TrazabilidadService trazabilidadService,
             SimpMessagingTemplate messagingTemplate) {
         this.pedidoRepository = pedidoRepository;
         this.canalRepository = canalRepository;
         this.mesaRepository = mesaRepository;
         this.platoRepository = platoRepository;
         this.usuarioRepository = usuarioRepository;
-        this.transicionRepository = transicionRepository;
+        this.trazabilidadService = trazabilidadService;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -93,7 +93,8 @@ public class PedidoService {
         pedido.setClienteTelefono(request.getClienteTelefono());
         pedido.setClienteDireccion(request.getClienteDireccion());
         pedido.setObservaciones(request.getObservaciones());
-        pedido.setEstado("BORRADOR");
+        pedido.setEstado(EstadoPedido.ENVIADO);
+        pedido.setFechaEnvioCocina(LocalDateTime.now());
 
         BigDecimal totalAcumulado = BigDecimal.ZERO;
 
@@ -110,7 +111,8 @@ public class PedidoService {
             detalle.setSubtotal(subtotal);
             detalle.setModificadores(normalizarModificadores(itemReq.getModificadores()));
             detalle.setTiempoEstandarMinutos(plato.getTiempoEstandarMinutos());
-            detalle.setEstadoItem("RECIBIDO");
+            // HU013 Escenario 3: todo ítem de un pedido recién registrado queda en RECIBIDO
+            detalle.setEstadoItem(EstadoItem.RECIBIDO);
 
             pedido.addItem(detalle);
             totalAcumulado = totalAcumulado.add(subtotal);
@@ -119,14 +121,11 @@ public class PedidoService {
         pedido.setTotal(totalAcumulado);
         Pedido pedidoGuardado = pedidoRepository.save(pedido);
 
-        // Registro de auditoría inicial
-        TransicionEstado transicion = new TransicionEstado();
-        transicion.setPedido(pedidoGuardado);
-        transicion.setEstadoOrigen(null);
-        transicion.setEstadoDestino("BORRADOR");
-        transicion.setUsuario(mozo);
-        transicion.setMotivo("Apertura de comanda en salón por mozo");
-        transicionRepository.save(transicion);
+        // Registro de auditoría inicial del pedido y de cada ítem
+        trazabilidadService.registrarPedido(pedidoGuardado, null, EstadoPedido.ENVIADO.name(), mozo, "Apertura de comanda");
+        for (DetallePedido item : pedidoGuardado.getItems()) {
+            trazabilidadService.registrarItem(item, null, EstadoItem.RECIBIDO.name(), mozo, null);
+        }
 
         PedidoResponse response = convertirADto(pedidoGuardado);
 
@@ -149,7 +148,7 @@ public class PedidoService {
 
     @Transactional(readOnly = true)
     public List<PedidoResponse> listarPedidosActivos() {
-        return pedidoRepository.findByEstadoInOrderByCreatedAtAsc(List.of("BORRADOR", "ENVIADO", "EN_PREPARACION", "LISTO"))
+        return pedidoRepository.findByEstadoInOrderByCreatedAtAsc(List.of(EstadoPedido.ENVIADO, EstadoPedido.EN_PREPARACION, EstadoPedido.LISTO))
                 .stream().map(this::convertirADto).collect(Collectors.toList());
     }
 
@@ -213,7 +212,7 @@ public class PedidoService {
         dto.setUsuarioNombre(pedido.getUsuario().getNombre() + " " + pedido.getUsuario().getApellido());
         dto.setClienteNombre(pedido.getClienteNombre());
         dto.setClienteTelefono(pedido.getClienteTelefono());
-        dto.setEstado(pedido.getEstado());
+        dto.setEstado(pedido.getEstado().name());
         dto.setTotal(pedido.getTotal());
         dto.setObservaciones(pedido.getObservaciones());
         dto.setCreatedAt(pedido.getCreatedAt());
@@ -231,7 +230,7 @@ public class PedidoService {
                 itemDto.setSubtotal(item.getSubtotal());
                 itemDto.setModificadores(item.getModificadores());
                 itemDto.setTiempoEstandarMinutos(item.getTiempoEstandarMinutos());
-                itemDto.setEstadoItem(item.getEstadoItem());
+                itemDto.setEstadoItem(item.getEstadoItem().name());
                 return itemDto;
             }).collect(Collectors.toList()));
         }

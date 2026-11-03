@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
  * - Guarda una referencia directa a la 'estacion' para permitir enrutar el ítem a la pantalla
  *   de cocina correspondiente sin consultas polimórficas complejas.
  * - Copia 'tiempoEstandarMinutos' del plato al momento de pedirlo para aislar variaciones históricas.
+ * - 'version' habilita el bloqueo optimista ante cambios de estado simultáneos (HU013 Esc. 6).
  */
 @Entity
 @Table(name = "detalles_pedido")
@@ -49,8 +50,17 @@ public class DetallePedido {
     @Column(name = "tiempo_estandar_minutos", nullable = false)
     private Integer tiempoEstandarMinutos;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "estado_item", nullable = false, length = 30)
-    private String estadoItem = "RECIBIDO";
+    private EstadoItem estadoItem = EstadoItem.RECIBIDO;
+
+    // Hora programada de inicio; la asignará el motor de secuenciación (fuera del Sprint 2)
+    @Column(name = "hora_disparo")
+    private LocalDateTime horaDisparo;
+
+    @Version
+    @Column(nullable = false)
+    private Long version = 0L;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -84,8 +94,14 @@ public class DetallePedido {
     public Integer getTiempoEstandarMinutos() { return tiempoEstandarMinutos; }
     public void setTiempoEstandarMinutos(Integer tiempoEstandarMinutos) { this.tiempoEstandarMinutos = tiempoEstandarMinutos; }
 
-    public String getEstadoItem() { return estadoItem; }
-    public void setEstadoItem(String estadoItem) { this.estadoItem = estadoItem; }
+    public EstadoItem getEstadoItem() { return estadoItem; }
+    public void setEstadoItem(EstadoItem estadoItem) { this.estadoItem = estadoItem; }
+
+    public LocalDateTime getHoraDisparo() { return horaDisparo; }
+    public void setHoraDisparo(LocalDateTime horaDisparo) { this.horaDisparo = horaDisparo; }
+
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

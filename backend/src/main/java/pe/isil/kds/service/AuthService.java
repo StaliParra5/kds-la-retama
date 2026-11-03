@@ -102,16 +102,18 @@ public class AuthService {
             throw new BadCredentialsException("El rol Administrador exige usuario y contraseña completos.");
         }
 
-        Long estacionId = request.getEstacionId();
+        // Estación vinculada a la terminal: solo se acepta si existe (viaja en el JWT, decisión D6)
+        Long estacionId = null;
         String estacionNombre = null;
-        if (estacionId != null) {
-            Estacion estacion = estacionRepository.findById(estacionId).orElse(null);
+        if (request.getEstacionId() != null) {
+            Estacion estacion = estacionRepository.findById(request.getEstacionId()).orElse(null);
             if (estacion != null) {
+                estacionId = estacion.getId();
                 estacionNombre = estacion.getNombre();
             }
         }
 
-        String token = tokenProvider.generateToken(usuarioEncontrado.getId(), usuarioEncontrado.getUsername(), rolCodigo);
+        String token = tokenProvider.generateToken(usuarioEncontrado.getId(), usuarioEncontrado.getUsername(), rolCodigo, estacionId);
 
         return new AuthResponse(
                 token,

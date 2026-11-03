@@ -15,7 +15,7 @@ import java.util.List;
  * Reglas de Dominio:
  * - Si canal.codigo == 'SALON', la asociación con 'mesa' es obligatoria (HU006).
  * - El canal de origen es inmutable una vez registrado el pedido (HU010 Escenario 5).
- * - Se inicializa con estado 'BORRADOR' en sala hasta que el mozo envía la orden a cocina.
+ * - Su estado se deriva del estado de sus ítems (HU013); al registrarse queda ENVIADO.
  */
 @Entity
 @Table(name = "pedidos")
@@ -49,8 +49,9 @@ public class Pedido {
     @Column(name = "cliente_direccion", columnDefinition = "TEXT")
     private String clienteDireccion;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
-    private String estado = "BORRADOR";
+    private EstadoPedido estado = EstadoPedido.ENVIADO;
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal total = BigDecimal.ZERO;
@@ -106,8 +107,8 @@ public class Pedido {
     public String getClienteDireccion() { return clienteDireccion; }
     public void setClienteDireccion(String clienteDireccion) { this.clienteDireccion = clienteDireccion; }
 
-    public String getEstado() { return estado; }
-    public void setEstado(String estado) { this.estado = estado; }
+    public EstadoPedido getEstado() { return estado; }
+    public void setEstado(EstadoPedido estado) { this.estado = estado; }
 
     public BigDecimal getTotal() { return total; }
     public void setTotal(BigDecimal total) { this.total = total; }

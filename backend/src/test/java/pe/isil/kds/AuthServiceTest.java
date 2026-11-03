@@ -107,7 +107,7 @@ class AuthServiceTest {
         when(usuarioRepository.findByActivoTrue()).thenReturn(List.of(cocineroUser));
         when(passwordEncoder.matches("1234", "hashedPin")).thenReturn(true);
         when(estacionRepository.findById(10L)).thenReturn(Optional.of(estacionPlancha));
-        when(tokenProvider.generateToken(2L, "cocinero1", "COCINERO")).thenReturn("cocina-jwt-token");
+        when(tokenProvider.generateToken(2L, "cocinero1", "COCINERO", 10L)).thenReturn("cocina-jwt-token");
 
         AuthResponse response = authService.loginPin(new PinAuthRequest("1234", 10L));
 

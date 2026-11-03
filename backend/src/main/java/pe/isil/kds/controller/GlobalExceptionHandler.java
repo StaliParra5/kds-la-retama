@@ -8,6 +8,10 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import pe.isil.kds.exception.EstadoDesactualizadoException;
 import pe.isil.kds.exception.OperacionNoPermitidaException;
 
 import java.time.LocalDateTime;
@@ -30,7 +34,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
-        return buildResponse(HttpStatus.FORBIDDEN, "Acceso denegado", "No cuenta con los privilegios necesarios para esta operación.");
+        // Mensajes de dominio (ej. estación ajena) se muestran; el genérico de Spring se reemplaza
+        String mensaje = ex.getMessage() == null || "Access Denied".equals(ex.getMessage())
+                ? "No cuenta con los privilegios necesarios para esta operación."
+                : ex.getMessage();
+        return buildResponse(HttpStatus.FORBIDDEN, "Acceso denegado", mensaje);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -41,6 +49,30 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(OperacionNoPermitidaException.class)
     public ResponseEntity<Map<String, Object>> handleOperacionNoPermitida(OperacionNoPermitidaException ex) {
         return buildResponse(HttpStatus.CONFLICT, "Operación no permitida", ex.getMessage());
+    }
+
+    @ExceptionHandler(EstadoDesactualizadoException.class)
+    public ResponseEntity<Map<String, Object>> handleEstadoDesactualizado(EstadoDesactualizadoException ex) {
+        ResponseEntity<Map<String, Object>> respuesta = buildResponse(HttpStatus.CONFLICT, "Estado desactualizado", ex.getMessage());
+        respuesta.getBody().put("item", ex.getItemActual());
+        return respuesta;
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<Map<String, Object>> handleConflictoVersion(ObjectOptimisticLockingFailureException ex) {
+        return buildResponse(HttpStatus.CONFLICT, "Estado desactualizado",
+                "El registro fue modificado por otro usuario al mismo tiempo. Actualice la pantalla e intente de nuevo.");
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleCuerpoIlegible(HttpMessageNotReadableException ex) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "Solicitud inválida",
+                "El cuerpo de la solicitud no tiene el formato esperado o contiene valores no permitidos.");
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleRecursoInexistente(NoResourceFoundException ex) {
+        return buildResponse(HttpStatus.NOT_FOUND, "Recurso no encontrado", "La ruta solicitada no existe.");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
