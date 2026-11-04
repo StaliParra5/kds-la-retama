@@ -358,13 +358,21 @@ export const LoginPage: React.FC = () => {
           )}
 
           {/* Información de Ayuda Operativa de Guardia */}
-          <div className="mt-6 pt-4 border-t border-surface-container-high flex items-center justify-between text-[11px] text-on-surface-variant">
-            <span>
+          <div className="mt-6 pt-4 border-t border-surface-container-high space-y-1.5 text-[11px] text-on-surface-variant">
+            <div>
               Credenciales demo: <strong className="text-on-surface">admin / admin123</strong>
-            </span>
-            <span>
-              PIN Mozo: <strong className="text-on-surface">1234</strong>
-            </span>
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <span>
+                PIN Mozo: <strong className="text-on-surface">1234</strong>
+              </span>
+              <span>
+                PIN Cocina: <strong className="text-on-surface">5678</strong>
+              </span>
+              <span>
+                PIN Despacho: <strong className="text-on-surface">9012</strong>
+              </span>
+            </div>
           </div>
         </div>
       </main>
