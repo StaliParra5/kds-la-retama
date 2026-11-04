@@ -323,3 +323,10 @@
   - Con pedidos o transiciones registradas no se elimina: 409 con `codigo: MOZO_CON_HISTORIAL` (también si el pedido llega durante el borrado) y la pantalla ofrece desactivarlo.
   - `AdminMozosPage` en `/admin/mozos` (enlace "Mozos" en el menú del admin).
   - Criterio de Aceptación: Escenarios 1 a 8 de HU042; `MozoServiceTest`, `VigenciaSesionTest`; smoke `smoke_hu042.cjs` 28/28.
+
+- [x] **TASK-062 [FULL] [B2] Asignar mozos a zonas (HU043, D18)**
+  - Tabla `mozo_zonas` (V13); los mozos existentes conservan todas las zonas activas. `PUT /api/v1/mozos/{id}/zonas` reemplaza la asignación (solo zonas activas; lista vacía = sin zonas).
+  - Restrictivo en el servidor: `GET /zonas` y `GET /mesas` entregan al mozo solo sus zonas activas; `POST /pedidos` de salón en una mesa de otra zona responde 403; `GET /pedidos/{id}` y `/pedidos/activos` le muestran solo sus pedidos y los de mesas de sus zonas (uno ajeno responde 404). Sin zonas, el mozo registra pedidos para llevar o delivery.
+  - Una zona inactiva ya asignada se conserva al editar la asignación (vuelve a operar al reactivarse); una nueva debe estar activa.
+  - `AdminMozosPage`: zonas de cada mozo y diálogo "Zonas" con casillas; el comandero avisa "Sin zonas asignadas", ya no arranca con una mesa fija y recarga mesas y zonas ante un 400/403. Cerrar sesión limpia la caché de consultas para que el siguiente usuario de la terminal no vea datos del anterior.
+  - Criterio de Aceptación: Escenarios 1 a 5 de HU043; `MozoServiceTest`, `MesaServiceTest`, `PedidoServiceTest`; smoke `smoke_hu043.cjs` 17/17.

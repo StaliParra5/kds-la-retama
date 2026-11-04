@@ -31,6 +31,7 @@ async function despacharItem(item, expedidor) {
     executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: 'new',
   });
   const errors = [];
+  let zonasOriginalesAngie = null;
 
   try {
     const admin = await loginCompleto('login-admin', { username: 'admin', password: 'admin123' });
@@ -44,7 +45,11 @@ async function despacharItem(item, expedidor) {
     const creada = await http('POST', '/zonas', A, { nombre: `Rooftop ${sufijo}`, descripcion: 'Azotea' });
     check('HU040 Esc.1 se registra una zona nueva (201)', creada.status === 201, String(creada.status));
     const zonaId = creada.data.id;
-    check('HU040 Esc.1 la zona queda disponible para los mozos', (await zonasMozo()).some((z) => z.id === zonaId));
+    // HU043: el mozo solo ve las zonas asignadas; se le agrega la nueva y al final se restaura su asignación
+    const angie = (await http('GET', '/mozos', A)).data.find((m) => m.username === 'angie');
+    zonasOriginalesAngie = { id: angie.id, zonaIds: angie.zonas.filter((z) => z.activo).map((z) => z.id) };
+    await http('PUT', `/mozos/${angie.id}/zonas`, A, { zonaIds: [...zonasOriginalesAngie.zonaIds, zonaId] });
+    check('HU040 Esc.1 la zona queda disponible para los mozos que la atienden', (await zonasMozo()).some((z) => z.id === zonaId));
 
     const dup = await http('POST', '/zonas', A, { nombre: `rooftop ${sufijo}` });
     check('HU040 Esc.2 nombre repetido sin importar mayúsculas (400)', dup.status === 400 && dup.data.mensaje.includes('Ya existe'), `${dup.status} ${dup.data?.mensaje}`);
@@ -145,6 +150,10 @@ async function despacharItem(item, expedidor) {
   } catch (e) {
     check('Ejecución sin excepciones', false, e.message);
   } finally {
+    if (zonasOriginalesAngie) {
+      const admin = await login('login-admin', { username: 'admin', password: 'admin123' });
+      await http('PUT', `/mozos/${zonasOriginalesAngie.id}/zonas`, admin, { zonaIds: zonasOriginalesAngie.zonaIds });
+    }
     await browser.close();
     for (const r of results) console.log(`${r.ok ? 'OK  ' : 'FAIL'} ${r.name}${r.detail ? ` (${r.detail})` : ''}`);
     process.exit(results.every((r) => r.ok) ? 0 : 1);

@@ -5,21 +5,26 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.isil.kds.dto.MozoDto;
+import pe.isil.kds.dto.ZonaAsignadaDto;
 import pe.isil.kds.exception.OperacionNoPermitidaException;
 import pe.isil.kds.exception.RecursoNoEncontradoException;
 import pe.isil.kds.model.Rol;
 import pe.isil.kds.model.Usuario;
+import pe.isil.kds.model.Zona;
 import pe.isil.kds.repository.PedidoRepository;
 import pe.isil.kds.repository.RolRepository;
 import pe.isil.kds.repository.TransicionEstadoRepository;
 import pe.isil.kds.repository.UsuarioRepository;
+import pe.isil.kds.repository.ZonaRepository;
 
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * Servicio de Gestión de Mozos (HU042).
+ * Servicio de Gestión de Mozos (HU042) y de sus zonas asignadas (HU043).
  *
  * Reglas de Negocio:
  * - Solo opera sobre usuarios con rol MOZO; el resto del personal se gestiona aparte (HU002).
@@ -41,15 +46,17 @@ public class MozoService {
     private final PedidoRepository pedidoRepository;
     private final TransicionEstadoRepository transicionRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ZonaRepository zonaRepository;
 
     public MozoService(UsuarioRepository usuarioRepository, RolRepository rolRepository,
                        PedidoRepository pedidoRepository, TransicionEstadoRepository transicionRepository,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder, ZonaRepository zonaRepository) {
         this.usuarioRepository = usuarioRepository;
         this.rolRepository = rolRepository;
         this.pedidoRepository = pedidoRepository;
         this.transicionRepository = transicionRepository;
         this.passwordEncoder = passwordEncoder;
+        this.zonaRepository = zonaRepository;
     }
 
     @Transactional(readOnly = true)
@@ -134,6 +141,47 @@ public class MozoService {
         }
     }
 
+    /**
+     * HU043 Escenarios 1 y 5: reemplaza las zonas del mozo. Una zona nueva debe estar activa; una inactiva
+     * que ya tenía se puede conservar (vuelve a operar cuando se reactive). Los pedidos ya enviados no
+     * cambian; el mozo ve el cambio en su siguiente consulta.
+     */
+    @Transactional
+    public MozoDto asignarZonas(Long id, List<Long> zonaIds) {
+        if (zonaIds.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new IllegalArgumentException("La lista de zonas contiene un valor vacío.");
+        }
+        Usuario mozo = buscarMozo(id);
+        Set<Long> pedidas = new HashSet<>(zonaIds);
+        List<Zona> zonas = zonaRepository.findAllById(pedidas);
+        if (zonas.size() != pedidas.size()) {
+            throw new IllegalArgumentException("Alguna de las zonas indicadas no existe.");
+        }
+        Set<Long> yaAsignadas = mozo.getZonas().stream().map(Zona::getId).collect(Collectors.toSet());
+        zonas.stream()
+                .filter(z -> !Boolean.TRUE.equals(z.getActivo()) && !yaAsignadas.contains(z.getId()))
+                .findFirst()
+                .ifPresent(z -> {
+                    throw new IllegalArgumentException("La zona '" + z.getNombre() + "' está inactiva: reactívela antes de asignarla.");
+                });
+        mozo.getZonas().clear();
+        mozo.getZonas().addAll(zonas);
+        return aDto(usuarioRepository.save(mozo));
+    }
+
+    /**
+     * Zonas activas que puede operar un mozo (HU043 Escenario 2). Vacío si no tiene ninguna.
+     */
+    @Transactional(readOnly = true)
+    public Set<Long> idsZonasActivasDe(String username) {
+        return usuarioRepository.findByUsernameIgnoreCase(username)
+                .map(u -> u.getZonas().stream()
+                        .filter(z -> Boolean.TRUE.equals(z.getActivo()))
+                        .map(Zona::getId)
+                        .collect(Collectors.toSet()))
+                .orElse(Set.of());
+    }
+
     private Rol bloquearAsignacionDePin() {
         return rolRepository.bloquearPorCodigo(ROL_MOZO)
                 .orElseThrow(() -> new IllegalStateException("No existe el rol MOZO en el sistema."));
@@ -164,6 +212,11 @@ public class MozoService {
     }
 
     private static MozoDto aDto(Usuario u, boolean tieneHistorial) {
-        return new MozoDto(u.getId(), u.getUsername(), u.getNombre(), u.getApellido(), u.getActivo(), tieneHistorial);
+        MozoDto dto = new MozoDto(u.getId(), u.getUsername(), u.getNombre(), u.getApellido(), u.getActivo(), tieneHistorial);
+        dto.setZonas(u.getZonas().stream()
+                .sorted(Comparator.comparing(Zona::getNombre, String.CASE_INSENSITIVE_ORDER))
+                .map(z -> new ZonaAsignadaDto(z.getId(), z.getNombre(), z.getActivo()))
+                .toList());
+        return dto;
     }
 }

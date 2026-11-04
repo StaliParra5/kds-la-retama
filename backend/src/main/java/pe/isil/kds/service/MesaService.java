@@ -48,7 +48,17 @@ public class MesaService {
 
     @Transactional(readOnly = true)
     public List<ZonaDto> listarZonasConMesas() {
+        return listarZonasConMesas(null);
+    }
+
+    /**
+     * Zonas activas con sus mesas activas. Con {@code zonasPermitidas} (las del mozo, HU043) se limita a ellas;
+     * {@code null} devuelve todas.
+     */
+    @Transactional(readOnly = true)
+    public List<ZonaDto> listarZonasConMesas(Set<Long> zonasPermitidas) {
         return zonaRepository.findByActivoTrue().stream()
+                .filter(zona -> zonasPermitidas == null || zonasPermitidas.contains(zona.getId()))
                 .map(zona -> {
                     List<MesaDto> mesasDto = mesaRepository.findByZonaIdAndActivoTrue(zona.getId()).stream()
                             .map(m -> aDto(m, false))
@@ -76,7 +86,13 @@ public class MesaService {
 
     @Transactional(readOnly = true)
     public List<MesaDto> listarMesas() {
+        return listarMesas(null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<MesaDto> listarMesas(Set<Long> zonasPermitidas) {
         return mesaRepository.findByActivoTrueAndZonaActivoTrue().stream()
+                .filter(m -> zonasPermitidas == null || zonasPermitidas.contains(m.getZona().getId()))
                 .map(m -> aDto(m, false))
                 .collect(Collectors.toList());
     }

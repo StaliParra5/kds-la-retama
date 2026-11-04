@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import pe.isil.kds.dto.AsignarZonasRequest;
 import pe.isil.kds.dto.CambiarActivoRequest;
 import pe.isil.kds.dto.CambiarPinRequest;
 import pe.isil.kds.dto.CrearMozoRequest;
@@ -60,6 +61,12 @@ public class MozoController {
     @PatchMapping("/{id}/estado")
     public ResponseEntity<MozoDto> cambiarEstado(@PathVariable Long id, @Valid @RequestBody CambiarActivoRequest request) {
         return ResponseEntity.ok(mozoService.cambiarEstado(id, request.getActivo()));
+    }
+
+    @Operation(summary = "Reemplazar las zonas que atiende el mozo (HU043 Esc. 1 y 5)")
+    @PutMapping("/{id}/zonas")
+    public ResponseEntity<MozoDto> asignarZonas(@PathVariable Long id, @Valid @RequestBody AsignarZonasRequest request) {
+        return ResponseEntity.ok(mozoService.asignarZonas(id, request.getZonaIds()));
     }
 
     @Operation(summary = "Eliminar un mozo sin historial; con pedidos responde 409 MOZO_CON_HISTORIAL (HU042 Esc. 7 y 8)")

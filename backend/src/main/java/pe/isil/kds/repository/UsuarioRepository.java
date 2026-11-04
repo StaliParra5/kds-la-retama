@@ -1,5 +1,6 @@
 package pe.isil.kds.repository;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,6 +15,8 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     List<Usuario> findByActivoTrue();
     List<Usuario> findByRolCodigoAndActivoTrue(String rolCodigo);
     Optional<Usuario> findByUsernameIgnoreCase(String username);
+    // Con sus zonas en la misma consulta: el listado de mozos las muestra (HU043)
+    @EntityGraph(attributePaths = "zonas")
     List<Usuario> findByRolCodigoOrderByApellidoAscNombreAsc(String rolCodigo);
 
     // Usuarios con PIN distintos del indicado: contra ellos se valida que un PIN nuevo no se repita (HU042)

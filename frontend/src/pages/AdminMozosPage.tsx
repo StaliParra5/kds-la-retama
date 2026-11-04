@@ -1,4 +1,5 @@
-// Pantalla de Gestión de Mozos para La Retama KDS (HU042)
+// Pantalla de Gestión de Mozos para La Retama KDS (HU042, HU043)
+// - HU043: asignar las zonas que atiende cada mozo (restrictivo: fuera de ellas no ve mesas).
 // - Crear mozos con usuario y PIN de 4 dígitos; editar nombre y apellido; asignar un PIN nuevo.
 // - Desactivar y reactivar; eliminar solo si no tiene pedidos (con historial se ofrece desactivarlo).
 // - El servidor valida usuario y PIN únicos; aquí se muestran sus mensajes tal cual.
@@ -10,7 +11,7 @@ import { apiClient } from '../api/client';
 import { LaRetamaWatermark } from '../components/common/LaRetamaWatermark';
 import { TopAppBar } from '../components/common/TopAppBar';
 import { useToast } from '../context/ToastContext';
-import type { Mozo } from '../types';
+import type { Mozo, Zona } from '../types';
 
 const CLAVE_MOZOS = ['mozos'];
 const PIN_VALIDO = /^\d{4}$/;
@@ -49,6 +50,30 @@ export const AdminMozosPage: React.FC = () => {
   });
 
   const refrescar = () => queryClient.invalidateQueries({ queryKey: CLAVE_MOZOS });
+
+  // HU043: zonas activas que se pueden asignar (el admin recibe todo el salón activo)
+  const [zonasDe, setZonasDe] = useState<{ mozo: Mozo; seleccion: number[] } | null>(null);
+  const { data: zonasAsignables = [], isLoading: cargandoZonas } = useQuery<Zona[]>({
+    queryKey: ['zonas-asignables'],
+    queryFn: async () => (await apiClient.get('/zonas')).data,
+    enabled: zonasDe !== null,
+  });
+
+  const asignarZonas = useMutation({
+    mutationFn: async ({ mozo, zonaIds }: { mozo: Mozo; zonaIds: number[] }) =>
+      (await apiClient.put<Mozo>(`/mozos/${mozo.id}/zonas`, { zonaIds })).data,
+    onSuccess: (mozo) => {
+      refrescar();
+      setZonasDe(null);
+      showToast(
+        mozo.zonas.length === 0
+          ? `${mozo.nombre} ${mozo.apellido} queda sin zonas: solo para llevar o delivery.`
+          : `${mozo.nombre} ${mozo.apellido} atiende: ${mozo.zonas.map((z) => z.nombre).join(', ')}.`,
+        'success',
+      );
+    },
+    onError: (err) => showToast(mensajeError(err, 'No se pudieron asignar las zonas.'), 'warning'),
+  });
 
   const cerrar = () => {
     setForm(null);
@@ -229,7 +254,40 @@ export const AdminMozosPage: React.FC = () => {
                   </span>
                 </div>
 
+                {/* HU043: zonas que atiende; sin zonas solo toma pedidos para llevar o delivery */}
+                <div data-zonas className="flex flex-wrap items-center gap-1">
+                  {m.zonas.length === 0 ? (
+                    <span className="text-[11px] font-semibold text-tertiary">
+                      Sin zonas: solo para llevar o delivery
+                    </span>
+                  ) : (
+                    m.zonas.map((z) => (
+                      <span
+                        key={z.id}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                          z.activo
+                            ? 'bg-primary/10 text-primary'
+                            : 'bg-surface-container-high text-on-surface-variant line-through'
+                        }`}
+                      >
+                        {z.nombre}
+                      </span>
+                    ))
+                  )}
+                </div>
+
                 <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-surface-container-low">
+                  <BotonAccion
+                    icono="table_restaurant"
+                    texto="Zonas"
+                    onClick={() =>
+                      setZonasDe({
+                        mozo: m,
+                        // Las inactivas asignadas se conservan: vuelven a operar al reactivarse
+                        seleccion: m.zonas.map((z) => z.id),
+                      })
+                    }
+                  />
                   <BotonAccion
                     icono="edit"
                     texto="Editar"
@@ -367,6 +425,82 @@ export const AdminMozosPage: React.FC = () => {
               </button>
             </div>
           </form>
+        </Dialogo>
+      )}
+
+      {zonasDe && (
+        <Dialogo
+          titulo={`Zonas de ${zonasDe.mozo.nombre} ${zonasDe.mozo.apellido}`}
+          onCerrar={() => setZonasDe(null)}
+        >
+          <div className="p-6 flex flex-col gap-4 text-sm">
+            <p className="text-xs text-on-surface-variant">
+              El mozo solo verá y podrá tomar pedidos en las mesas de las zonas marcadas. Sin zonas,
+              solo registra pedidos para llevar o delivery.
+            </p>
+            {zonasDe.mozo.zonas.some((z) => !z.activo) && (
+              <p className="text-[11px] text-on-surface-variant">
+                Conserva además las zonas inactivas:{' '}
+                {zonasDe.mozo.zonas
+                  .filter((z) => !z.activo)
+                  .map((z) => z.nombre)
+                  .join(', ')}
+                .
+              </p>
+            )}
+            {cargandoZonas ? (
+              <p className="text-xs font-bold text-on-surface-variant">Cargando zonas...</p>
+            ) : zonasAsignables.length === 0 ? (
+              <p className="text-xs font-bold">No hay zonas activas.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {zonasAsignables.map((z) => (
+                  <label
+                    key={z.id}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg border border-surface-container-high hover:bg-surface-container-low cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      data-zona-check={z.id}
+                      checked={zonasDe.seleccion.includes(z.id)}
+                      onChange={(e) =>
+                        setZonasDe({
+                          ...zonasDe,
+                          seleccion: e.target.checked
+                            ? [...zonasDe.seleccion, z.id]
+                            : zonasDe.seleccion.filter((id) => id !== z.id),
+                        })
+                      }
+                      className="w-4 h-4 accent-primary"
+                    />
+                    <span className="font-semibold text-xs">{z.nombre}</span>
+                    <span className="ml-auto text-[10px] text-on-surface-variant">
+                      {z.mesas.length} mesas
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-surface-container-high">
+              <button
+                type="button"
+                onClick={() => setZonasDe(null)}
+                className="px-4 py-2 text-xs font-bold text-on-surface-variant hover:text-on-surface rounded-lg"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={asignarZonas.isPending || cargandoZonas}
+                onClick={() =>
+                  asignarZonas.mutate({ mozo: zonasDe.mozo, zonaIds: zonasDe.seleccion })
+                }
+                className="px-5 py-2.5 bg-primary text-on-primary text-xs font-bold rounded-lg disabled:opacity-50"
+              >
+                GUARDAR ZONAS
+              </button>
+            </div>
+          </div>
         </Dialogo>
       )}
 

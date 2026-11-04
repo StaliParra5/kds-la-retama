@@ -12,6 +12,8 @@ public class MozoDto {
     private Boolean activo;
     // HU042 Escenario 8: con pedidos o transiciones registradas no se elimina, solo se desactiva
     private boolean tieneHistorial;
+    // HU043: zonas que atiende, ordenadas por nombre
+    private java.util.List<ZonaAsignadaDto> zonas = java.util.List.of();
 
     public MozoDto() {}
 
@@ -41,4 +43,7 @@ public class MozoDto {
 
     public boolean isTieneHistorial() { return tieneHistorial; }
     public void setTieneHistorial(boolean tieneHistorial) { this.tieneHistorial = tieneHistorial; }
+
+    public java.util.List<ZonaAsignadaDto> getZonas() { return zonas; }
+    public void setZonas(java.util.List<ZonaAsignadaDto> zonas) { this.zonas = zonas; }
 }

@@ -58,6 +58,8 @@ export interface Mozo {
   apellido: string;
   activo: boolean;
   tieneHistorial: boolean;
+  // HU043: zonas que atiende
+  zonas: { id: number; nombre: string; activo: boolean }[];
 }
 
 export interface CanalVenta {

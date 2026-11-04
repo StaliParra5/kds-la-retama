@@ -12,9 +12,13 @@ import pe.isil.kds.dto.CrearMesaRequest;
 import pe.isil.kds.dto.GuardarZonaRequest;
 import pe.isil.kds.dto.MesaDto;
 import pe.isil.kds.dto.ZonaDto;
+import pe.isil.kds.security.SesionKds;
 import pe.isil.kds.service.MesaService;
+import pe.isil.kds.service.MozoService;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Controlador de Zonas y Mesas de Salón (HU005, HU040, HU041).
@@ -25,15 +29,23 @@ import java.util.List;
 public class MesaController {
 
     private final MesaService mesaService;
+    private final MozoService mozoService;
 
-    public MesaController(MesaService mesaService) {
+    public MesaController(MesaService mesaService, MozoService mozoService) {
         this.mesaService = mesaService;
+        this.mozoService = mozoService;
     }
 
-    @Operation(summary = "Listar zonas con sus mesas agrupadas para el comandero")
+    // HU043: el mozo solo recibe sus zonas asignadas; el resto del personal ve todo el salón activo
+    private Set<Long> zonasPermitidas(Authentication authentication) {
+        SesionKds sesion = SesionKds.de(authentication);
+        return sesion.tieneRol("MOZO") ? mozoService.idsZonasActivasDe(sesion.username()) : null;
+    }
+
+    @Operation(summary = "Listar zonas con sus mesas para el comandero (el mozo recibe solo sus zonas, HU043)")
     @GetMapping("/zonas")
-    public ResponseEntity<List<ZonaDto>> listarZonasConMesas() {
-        return ResponseEntity.ok(mesaService.listarZonasConMesas());
+    public ResponseEntity<List<ZonaDto>> listarZonasConMesas(Authentication authentication) {
+        return ResponseEntity.ok(mesaService.listarZonasConMesas(zonasPermitidas(authentication)));
     }
 
     @Operation(summary = "Listar todas las zonas y mesas, incluidas las inactivas (Admin, HU040)")
@@ -64,10 +76,10 @@ public class MesaController {
         return ResponseEntity.ok(mesaService.cambiarEstadoZona(id, request.getActivo()));
     }
 
-    @Operation(summary = "Listar todas las mesas activas del restaurante")
+    @Operation(summary = "Listar las mesas activas (el mozo recibe solo las de sus zonas, HU043)")
     @GetMapping("/mesas")
-    public ResponseEntity<List<MesaDto>> listarMesas() {
-        return ResponseEntity.ok(mesaService.listarMesas());
+    public ResponseEntity<List<MesaDto>> listarMesas(Authentication authentication) {
+        return ResponseEntity.ok(mesaService.listarMesas(zonasPermitidas(authentication)));
     }
 
     @Operation(summary = "Registrar nueva mesa en una zona (Admin)")

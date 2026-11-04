@@ -1,5 +1,6 @@
 package pe.isil.kds.service;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -156,6 +157,16 @@ public class PedidoService {
         Usuario mozo = usuarioRepository.findByUsername(usernameMozo)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario mozo no encontrado: " + usernameMozo));
 
+        // HU043 Escenario 3: el mozo solo registra pedidos de salón en mesas de sus zonas asignadas
+        if ("SALON".equalsIgnoreCase(canal.getCodigo())) {
+            Long zonaMesa = mesa.getZona().getId();
+            boolean asignada = mozo.getZonas().stream().anyMatch(z -> z.getId().equals(zonaMesa));
+            if (!asignada) {
+                throw new AccessDeniedException("La mesa " + mesa.getNumeroMesa() + " pertenece a la zona '"
+                        + mesa.getZona().getNombre() + "', que no tiene asignada.");
+            }
+        }
+
         if (request.getItems() == null || request.getItems().isEmpty()) {
             throw new IllegalArgumentException("La comanda debe contener al menos un plato para ser abierta.");
         }
@@ -236,10 +247,43 @@ public class PedidoService {
         return convertirADto(pedido);
     }
 
+    /**
+     * HU043: un mozo solo consulta sus propios pedidos y los de mesas de sus zonas; uno ajeno se informa
+     * como inexistente para no revelarlo. El resto del personal consulta cualquiera.
+     */
+    @Transactional(readOnly = true)
+    public PedidoResponse obtenerPorId(Long id, String username, boolean esMozo) {
+        Pedido pedido = pedidoRepository.findById(id)
+                .filter(p -> !esMozo || visibleParaMozo(p, mozoPorUsername(username)))
+                .orElseThrow(() -> new RecursoNoEncontradoException("Pedido no encontrado con ID: " + id));
+        return convertirADto(pedido);
+    }
+
     @Transactional(readOnly = true)
     public List<PedidoResponse> listarPedidosActivos() {
+        return listarPedidosActivos(null, false);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PedidoResponse> listarPedidosActivos(String username, boolean esMozo) {
+        Usuario mozo = esMozo ? mozoPorUsername(username) : null;
         return pedidoRepository.findByEstadoInOrderByCreatedAtAsc(List.of(EstadoPedido.ENVIADO, EstadoPedido.EN_PREPARACION, EstadoPedido.LISTO))
-                .stream().map(this::convertirADto).collect(Collectors.toList());
+                .stream()
+                .filter(p -> mozo == null || visibleParaMozo(p, mozo))
+                .map(this::convertirADto).collect(Collectors.toList());
+    }
+
+    private Usuario mozoPorUsername(String username) {
+        return usuarioRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario mozo no encontrado: " + username));
+    }
+
+    private static boolean visibleParaMozo(Pedido pedido, Usuario mozo) {
+        if (pedido.getUsuario() != null && pedido.getUsuario().getId().equals(mozo.getId())) {
+            return true;
+        }
+        return pedido.getMesa() != null && mozo.getZonas().stream()
+                .anyMatch(z -> z.getId().equals(pedido.getMesa().getZona().getId()));
     }
 
     @Transactional(readOnly = true)

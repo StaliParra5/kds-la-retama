@@ -17,6 +17,8 @@ import pe.isil.kds.repository.PedidoRepository;
 import pe.isil.kds.repository.RolRepository;
 import pe.isil.kds.repository.TransicionEstadoRepository;
 import pe.isil.kds.repository.UsuarioRepository;
+import pe.isil.kds.repository.ZonaRepository;
+import pe.isil.kds.model.Zona;
 import pe.isil.kds.service.MozoService;
 
 import java.util.List;
@@ -42,6 +44,9 @@ class MozoServiceTest {
     @Mock
     private TransicionEstadoRepository transicionRepository;
 
+    @Mock
+    private ZonaRepository zonaRepository;
+
     // Costo bajo: el test verifica la regla, no la fortaleza del hash
     private final PasswordEncoder encoder = new BCryptPasswordEncoder(4);
 
@@ -53,7 +58,7 @@ class MozoServiceTest {
 
     @BeforeEach
     void setUp() {
-        mozoService = new MozoService(usuarioRepository, rolRepository, pedidoRepository, transicionRepository, encoder);
+        mozoService = new MozoService(usuarioRepository, rolRepository, pedidoRepository, transicionRepository, encoder, zonaRepository);
         rolMozo = rol(2L, "MOZO");
         angie = usuario(10L, "angie", rolMozo, "1234");
         cocinero = usuario(11L, "cocinero1", rol(3L, "COCINERO"), "5678");
@@ -267,6 +272,79 @@ class MozoServiceTest {
         assertTrue(mozos.get(0).isTieneHistorial());
         assertFalse(mozos.get(1).isTieneHistorial());
         verify(pedidoRepository, never()).existsByUsuarioId(anyLong());
+    }
+
+    // --- HU043: zonas del mozo
+
+    @Test
+    @DisplayName("HU043 Escenario 1: Se asignan una o varias zonas activas al mozo")
+    void asignarZonas_Activas() {
+        Zona terraza = zona(2L, "Terraza", true);
+        Zona barra = zona(3L, "Barra", true);
+        when(usuarioRepository.findById(10L)).thenReturn(Optional.of(angie));
+        when(zonaRepository.findAllById(java.util.Set.of(2L, 3L))).thenReturn(List.of(terraza, barra));
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(i -> i.getArgument(0));
+
+        MozoDto dto = mozoService.asignarZonas(10L, List.of(2L, 3L));
+
+        assertEquals(List.of("Barra", "Terraza"), dto.getZonas().stream().map(z -> z.nombre()).toList());
+    }
+
+    @Test
+    @DisplayName("HU043 Escenario 5: Quitar zonas reemplaza la asignación; una lista vacía deja al mozo sin zonas")
+    void asignarZonas_Reemplaza() {
+        angie.getZonas().add(zona(2L, "Terraza", true));
+        when(usuarioRepository.findById(10L)).thenReturn(Optional.of(angie));
+        when(zonaRepository.findAllById(java.util.Set.of())).thenReturn(List.of());
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(i -> i.getArgument(0));
+
+        assertTrue(mozoService.asignarZonas(10L, List.of()).getZonas().isEmpty());
+        assertTrue(angie.getZonas().isEmpty());
+    }
+
+    @Test
+    @DisplayName("HU043 Escenario 1: No se asignan zonas inactivas ni inexistentes")
+    void asignarZonas_InactivaOInexistente() {
+        when(usuarioRepository.findById(10L)).thenReturn(Optional.of(angie));
+        when(zonaRepository.findAllById(java.util.Set.of(4L))).thenReturn(List.of(zona(4L, "Rooftop", false)));
+        when(zonaRepository.findAllById(java.util.Set.of(99L))).thenReturn(List.of());
+
+        assertThrows(IllegalArgumentException.class, () -> mozoService.asignarZonas(10L, List.of(4L)));
+        assertThrows(IllegalArgumentException.class, () -> mozoService.asignarZonas(10L, List.of(99L)));
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("HU043 Escenario 1: Una zona inactiva que el mozo ya tenía se conserva; un valor nulo se rechaza")
+    void asignarZonas_ConservaInactivaYRechazaNulo() {
+        Zona rooftop = zona(4L, "Rooftop", false);
+        angie.getZonas().add(rooftop);
+        when(usuarioRepository.findById(10L)).thenReturn(Optional.of(angie));
+        when(zonaRepository.findAllById(java.util.Set.of(4L))).thenReturn(List.of(rooftop));
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(i -> i.getArgument(0));
+
+        assertEquals(1, mozoService.asignarZonas(10L, List.of(4L)).getZonas().size());
+        assertThrows(IllegalArgumentException.class, () -> mozoService.asignarZonas(10L, java.util.Arrays.asList(4L, null)));
+    }
+
+    @Test
+    @DisplayName("HU043 Escenarios 2 y 4: Las zonas que opera el mozo son solo las activas asignadas (vacío si no tiene)")
+    void idsZonasActivasDe() {
+        angie.getZonas().add(zona(2L, "Terraza", true));
+        angie.getZonas().add(zona(4L, "Rooftop", false));
+        when(usuarioRepository.findByUsernameIgnoreCase("angie")).thenReturn(Optional.of(angie));
+        when(usuarioRepository.findByUsernameIgnoreCase("nadie")).thenReturn(Optional.empty());
+
+        assertEquals(java.util.Set.of(2L), mozoService.idsZonasActivasDe("angie"));
+        assertTrue(mozoService.idsZonasActivasDe("nadie").isEmpty());
+    }
+
+    private static Zona zona(Long id, String nombre, boolean activo) {
+        Zona z = new Zona();
+        z.setId(id);
+        z.setNombre(nombre);
+        z.setActivo(activo);
+        return z;
     }
 
     private Usuario usuario(Long id, String username, Rol rol, String pin) {

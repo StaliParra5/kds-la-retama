@@ -292,6 +292,22 @@ class MesaServiceTest {
     }
 
     @Test
+    @DisplayName("HU043 Escenario 2: El mozo solo recibe las zonas y mesas que tiene asignadas")
+    void listar_FiltraPorZonasDelMozo() {
+        Mesa mesaTerraza = mesa(30L, terraza, "13");
+        when(zonaRepository.findByActivoTrue()).thenReturn(List.of(salon, terraza));
+        when(mesaRepository.findByZonaIdAndActivoTrue(2L)).thenReturn(List.of(mesaTerraza));
+        when(mesaRepository.findByActivoTrueAndZonaActivoTrue()).thenReturn(List.of(mesa05, mesaTerraza));
+
+        List<ZonaDto> zonas = mesaService.listarZonasConMesas(java.util.Set.of(2L));
+        assertEquals(1, zonas.size());
+        assertEquals("Terraza", zonas.get(0).getNombre());
+        assertEquals(List.of(30L), mesaService.listarMesas(java.util.Set.of(2L)).stream().map(MesaDto::getId).toList());
+        // HU043 Escenario 4: sin zonas no ve mesas de salón
+        assertTrue(mesaService.listarMesas(java.util.Set.of()).isEmpty());
+    }
+
+    @Test
     @DisplayName("HU040 Escenario 4: El comandero no recibe mesas de zonas inactivas")
     void listarMesas_SoloZonasActivas() {
         when(mesaRepository.findByActivoTrueAndZonaActivoTrue()).thenReturn(List.of(mesa05));

@@ -7,7 +7,7 @@
 // - Cantidades y modificadores por línea; un mismo plato admite varias preparaciones (HU008)
 // - Envío en una acción con acuse del servidor y reintento sin duplicar (HU009)
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { LaRetamaWatermark } from '../components/common/LaRetamaWatermark';
@@ -69,7 +69,7 @@ export const ComanderoPage: React.FC = () => {
   const [canalSeleccionado, setCanalSeleccionado] = useState<number | null>(null);
   // Se activa si el canal elegido fue desactivado: obliga a elegir otro en vez de cambiarlo en silencio
   const [canalRequiereSeleccion, setCanalRequiereSeleccion] = useState<boolean>(false);
-  const [mesaSeleccionada, setMesaSeleccionada] = useState<number | ''>(8);
+  const [mesaSeleccionada, setMesaSeleccionada] = useState<number | ''>('');
   const [zonaActiva, setZonaActiva] = useState<number | null>(null);
   const [categoriaActiva, setCategoriaActiva] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState<string>('');
@@ -121,15 +121,26 @@ export const ComanderoPage: React.FC = () => {
     setCanalRequiereSeleccion(false);
   };
 
-  const { data: zonas = [] } = useQuery<Zona[]>({
+  const queryClient = useQueryClient();
+
+  // HU043: el servidor solo entrega al mozo sus zonas asignadas y las mesas de ellas
+  const { data: zonas = [], isSuccess: zonasCargadas } = useQuery<Zona[]>({
     queryKey: ['zonas'],
     queryFn: async () => (await apiClient.get('/zonas')).data,
   });
+  const sinZonasAsignadas = zonasCargadas && zonas.length === 0;
 
-  const { data: mesas = [] } = useQuery<Mesa[]>({
+  const { data: mesas = [], isSuccess: mesasCargadas } = useQuery<Mesa[]>({
     queryKey: ['mesas'],
     queryFn: async () => (await apiClient.get('/mesas')).data,
   });
+
+  // Una mesa que ya no está entre las del mozo (zona quitada o desactivada) no puede quedar elegida
+  useEffect(() => {
+    if (mesaSeleccionada !== '' && mesasCargadas && !mesas.some((m) => m.id === mesaSeleccionada)) {
+      setMesaSeleccionada('');
+    }
+  }, [mesas, mesasCargadas, mesaSeleccionada]);
 
   const { data: categorias = [] } = useQuery<CategoriaPlato[]>({
     queryKey: ['categorias'],
@@ -367,6 +378,11 @@ export const ComanderoPage: React.FC = () => {
         refetchCanales();
         refetchPlatos();
       }
+      if (err.response?.status === 400 || err.response?.status === 403) {
+        // HU040/HU043: la mesa pudo desactivarse o su zona quitársele al mozo; se recargan para soltarla
+        queryClient.invalidateQueries({ queryKey: ['mesas'] });
+        queryClient.invalidateQueries({ queryKey: ['zonas'] });
+      }
     } finally {
       enviandoRef.current = false;
       setIsSubmitting(false);
@@ -445,9 +461,17 @@ export const ComanderoPage: React.FC = () => {
                   </button>
                 ))}
               </div>
+              {sinZonasAsignadas && (
+                <span
+                  data-sin-zonas
+                  className="text-[11px] font-bold text-tertiary bg-tertiary/10 border border-tertiary/30 px-2 py-1 rounded-lg"
+                >
+                  Sin zonas asignadas: solo puede tomar pedidos para llevar o delivery
+                </span>
+              )}
               <select
                 value={mesaSeleccionada}
-                disabled={envioSinConfirmar}
+                disabled={envioSinConfirmar || sinZonasAsignadas}
                 onChange={(e) => setMesaSeleccionada(e.target.value ? Number(e.target.value) : '')}
                 className="bg-surface-container-low border border-surface-container-high text-on-surface text-xs font-bold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-primary focus:outline-none"
               >

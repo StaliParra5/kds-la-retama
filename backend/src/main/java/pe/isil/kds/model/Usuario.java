@@ -51,6 +51,14 @@ public class Usuario {
     @Column(name = "version_sesion", nullable = false)
     private Integer versionSesion = 0;
 
+    // HU043: zonas que atiende el mozo; fuera de ellas no ve ni registra pedidos de mesa
+    @JsonIgnore
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "mozo_zonas",
+            joinColumns = @JoinColumn(name = "usuario_id"),
+            inverseJoinColumns = @JoinColumn(name = "zona_id"))
+    private java.util.Set<Zona> zonas = new java.util.HashSet<>();
+
     public Usuario() {}
 
     public Long getId() { return id; }
@@ -79,6 +87,9 @@ public class Usuario {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public java.util.Set<Zona> getZonas() { return zonas; }
+    public void setZonas(java.util.Set<Zona> zonas) { this.zonas = zonas; }
 
     public Integer getVersionSesion() { return versionSesion; }
     public void setVersionSesion(Integer versionSesion) { this.versionSesion = versionSesion; }

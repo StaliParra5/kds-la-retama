@@ -1,4 +1,5 @@
 // Contexto global de Autenticación, Sesión y Vinculación de Estación de Trabajo (HU001 & HU004)
+import { useQueryClient } from '@tanstack/react-query';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { apiClient } from '../api/client';
 import type { AuthResponse, UsuarioSesion } from '../types';
@@ -31,6 +32,7 @@ const estacionVinculada = (): { id: number | null; nombre: string | null } => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<UsuarioSesion | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [estacionId, setEstacionId] = useState<number | null>(null);
@@ -125,6 +127,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     localStorage.removeItem('kds_token');
     localStorage.removeItem('kds_user');
+    // Mesas y zonas dependen del usuario (HU043): el siguiente en la terminal no debe ver los datos del anterior
+    queryClient.clear();
     setToken(null);
     setUser(null);
   };

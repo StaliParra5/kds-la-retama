@@ -60,4 +60,15 @@ async function vaciarCola(estacionId, tokenCocinero) {
   }
 }
 
-module.exports = { API, WS, sleep, http, login, loginCompleto, stompSuscriptor, vaciarCola };
+// Crea un mozo con un PIN libre: las corridas anteriores dejan PIN ocupados, así que se prueba al azar (HU042)
+async function crearMozo(tokenAdmin, datos) {
+  for (let intento = 0; intento < 30; intento++) {
+    const pin = String(Math.floor(1000 + Math.random() * 9000));
+    const r = await http('POST', '/mozos', tokenAdmin, { ...datos, pin });
+    if (r.status === 201) return { ...r.data, pin };
+    if (!(r.status === 400 && r.data?.mensaje?.includes('PIN'))) throw new Error(`alta de mozo: ${r.status} ${r.data?.mensaje}`);
+  }
+  throw new Error('no se encontró un PIN libre');
+}
+
+module.exports = { API, WS, sleep, http, login, loginCompleto, stompSuscriptor, vaciarCola, crearMozo };

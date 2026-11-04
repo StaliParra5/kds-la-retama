@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import pe.isil.kds.dto.CrearPedidoRequest;
 import pe.isil.kds.dto.PedidoResponse;
 import pe.isil.kds.dto.TransicionDto;
+import pe.isil.kds.security.SesionKds;
 import pe.isil.kds.service.PedidoService;
 import pe.isil.kds.service.TrazabilidadService;
 
@@ -65,10 +66,11 @@ public class PedidoController {
         return ResponseEntity.ok(pedidoService.consultarEnvio(clave, authentication.getName()));
     }
 
-    @Operation(summary = "Obtener el detalle de una comanda por ID")
+    @Operation(summary = "Obtener el detalle de una comanda por ID (el mozo solo las suyas o las de sus zonas, HU043)")
     @GetMapping("/{id}")
-    public ResponseEntity<PedidoResponse> obtenerComanda(@PathVariable Long id) {
-        return ResponseEntity.ok(pedidoService.obtenerPorId(id));
+    public ResponseEntity<PedidoResponse> obtenerComanda(@PathVariable Long id, Authentication authentication) {
+        SesionKds sesion = SesionKds.de(authentication);
+        return ResponseEntity.ok(pedidoService.obtenerPorId(id, sesion.username(), sesion.tieneRol("MOZO")));
     }
 
     @Operation(summary = "Historial de transiciones de un pedido y sus ítems en orden cronológico (HU022, Admin)")
@@ -78,10 +80,11 @@ public class PedidoController {
         return ResponseEntity.ok(trazabilidadService.historialPedido(id));
     }
 
-    @Operation(summary = "Listar todas las comandas activas del restaurante")
+    @Operation(summary = "Listar las comandas activas (el mozo solo las suyas o las de sus zonas, HU043)")
     @GetMapping("/activos")
-    public ResponseEntity<List<PedidoResponse>> listarPedidosActivos() {
-        return ResponseEntity.ok(pedidoService.listarPedidosActivos());
+    public ResponseEntity<List<PedidoResponse>> listarPedidosActivos(Authentication authentication) {
+        SesionKds sesion = SesionKds.de(authentication);
+        return ResponseEntity.ok(pedidoService.listarPedidosActivos(sesion.username(), sesion.tieneRol("MOZO")));
     }
 
     @Operation(summary = "Obtener sugerencia del siguiente correlativo diario único (HU006)")

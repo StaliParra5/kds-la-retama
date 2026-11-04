@@ -91,6 +91,8 @@ class PedidoServiceTest {
         mozo.setUsername("angie");
         mozo.setNombre("Angie");
         mozo.setApellido("Valencia");
+        // HU043: la mesa 08 está en una zona que el mozo atiende
+        mozo.getZonas().add(mesa08.getZona());
 
         estacion = new Estacion();
         estacion.setId(1L);
@@ -178,6 +180,49 @@ class PedidoServiceTest {
         mesa08.getZona().setActivo(false);
         assertThrows(IllegalArgumentException.class, () -> pedidoService.crearComanda(req, "angie"));
         verify(pedidoRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("HU043 Escenario 3: Un pedido de salón en una mesa de otra zona se rechaza por falta de permisos")
+    void crearComanda_MesaFueraDeSusZonas_EsRechazada() {
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(1L);
+        req.setMesaId(8L);
+        req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
+        mozo.getZonas().clear();
+        when(canalRepository.findById(1L)).thenReturn(Optional.of(canalSalon));
+        when(mesaRepository.bloquearPorId(8L)).thenReturn(Optional.of(mesa08));
+        when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
+
+        org.springframework.security.access.AccessDeniedException ex = assertThrows(
+                org.springframework.security.access.AccessDeniedException.class, () -> pedidoService.crearComanda(req, "angie"));
+        assertTrue(ex.getMessage().contains("no tiene asignada"));
+        verify(pedidoRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("HU043 Escenario 2: El mozo consulta sus pedidos y los de sus zonas; uno ajeno se informa como inexistente")
+    void obtenerPorId_VisibilidadDelMozo() {
+        Usuario otroMozo = new Usuario();
+        otroMozo.setId(11L);
+        Pedido deSuZona = new Pedido();
+        deSuZona.setId(1L);
+        deSuZona.setUsuario(otroMozo);
+        deSuZona.setMesa(mesa08);
+        deSuZona.setCanal(canalSalon);
+        deSuZona.setEstado(EstadoPedido.ENVIADO);
+        Pedido ajeno = new Pedido();
+        ajeno.setId(2L);
+        ajeno.setUsuario(otroMozo);
+        ajeno.setCanal(canalDelivery);
+        ajeno.setEstado(EstadoPedido.ENVIADO);
+        when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
+        when(pedidoRepository.findById(1L)).thenReturn(Optional.of(deSuZona));
+        when(pedidoRepository.findById(2L)).thenReturn(Optional.of(ajeno));
+
+        assertEquals(1L, pedidoService.obtenerPorId(1L, "angie", true).getId());
+        assertThrows(pe.isil.kds.exception.RecursoNoEncontradoException.class, () -> pedidoService.obtenerPorId(2L, "angie", true));
+        assertEquals(2L, pedidoService.obtenerPorId(2L, "admin", false).getId());
     }
 
     @Test
