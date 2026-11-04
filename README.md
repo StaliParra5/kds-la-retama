@@ -91,10 +91,12 @@ pnpm dev
 
 | Rol | Método de Acceso | Identificador / PIN | Contraseña | Destino Inicial |
 |---|---|---|---|---|
-| **Administrador** | Credenciales | `admin` | `admin123` | `/admin/productos` |
+| **Administrador** | Credenciales | `admin` | `admin123` | `/admin/platos` |
 | **Mozo (Sala)** | PIN Táctil | PIN: `1234` | - | `/comandero` |
-| **Cocinero** | PIN Táctil | PIN: `1234` | - | `/admin/estaciones` |
-| **Expedidor** | Credenciales | `expedidor1` | `1234` | `/admin/estaciones` |
+| **Cocinero** | PIN Táctil | PIN: `5678` | - | `/cocina` (estación vinculada a la PC en Admin › Estaciones) |
+| **Expedidor** | PIN Táctil o Credenciales | PIN: `9012` · `expedidor1` | `1234` | `/comandero` |
+
+Cada usuario operativo tiene un PIN propio (migración V9): el ingreso solo con PIN rechaza un PIN compartido por varios usuarios.
 
 ---
 

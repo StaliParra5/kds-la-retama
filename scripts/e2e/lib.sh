@@ -8,7 +8,7 @@ token_admin()     { curl -s -X POST $B/auth/login-admin -H 'Content-Type: applic
 token_expedidor() { curl -s -X POST $B/auth/login-admin -H 'Content-Type: application/json' -d '{"username":"expedidor1","password":"1234"}' | json "d['token']"; }
 token_mozo()      { curl -s -X POST $B/auth/login-pin -H 'Content-Type: application/json' -d '{"username":"angie","pin":"1234"}' | json "d['token']"; }
 # $1 = estacionId vinculada a la terminal
-token_cocinero()  { curl -s -X POST $B/auth/login-pin -H 'Content-Type: application/json' -d "{\"username\":\"cocinero1\",\"pin\":\"1234\",\"estacionId\":$1}" | json "d['token']"; }
+token_cocinero()  { curl -s -X POST $B/auth/login-pin -H 'Content-Type: application/json' -d "{\"username\":\"cocinero1\",\"pin\":\"5678\",\"estacionId\":$1}" | json "d['token']"; }
 
 # $1 token, $2 método, $3 ruta, $4 cuerpo -> imprime "HTTP_CODE BODY"
 api() { curl -s -w '\n%{http_code}' -X "$2" "$B$3" -H "Authorization: Bearer $1" -H 'Content-Type: application/json' ${4:+-d "$4"} | python -c "import sys;t=sys.stdin.read().rsplit('\n',1);print(t[1], t[0])"; }

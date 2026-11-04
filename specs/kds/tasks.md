@@ -280,3 +280,11 @@
   - La estación se fija al pedir: reasignar el plato no mueve ítems ya enviados (Esc. 5).
   - Plato sin estación activa → 400 indicando el plato (Esc. 6). Nota: HU004 impide desactivar desde administración una estación con platos asignados, por lo que el caso solo se da por cambios directos en BD; la validación queda como defensa.
   - Criterio de Aceptación: Escenarios 1 a 6 de HU011; `PedidoServiceTest`, `CocinaServiceTest`; smoke con suscriptores STOMP reales 17/17.
+
+- [x] **TASK-056 [FULL] [F1] Pantalla de Estación de Cocina (HU012)**
+  - Ruta `/cocina` (`CocinaPage`): ítems pendientes de la estación agrupados por pedido, con código, canal, mesa, minutos desde el envío y semáforo contra el SLA del canal (Esc. 1 a 3); "+N ítems en otras estaciones" de solo lectura (Esc. 4); los Listos salen de la cola (Esc. 5); "Sin pedidos" cuando no hay pendientes (Esc. 6).
+  - Estación (D6): la del JWT del cocinero, que el servidor toma de la PC vinculada en HU004; el admin elige cualquiera. El cliente ya no completa la estación con la de la terminal si el servidor no la confirmó.
+  - Tiempo real (D7): `@stomp/stompjs` en `src/api/tiempoReal.ts` con reconexión, recarga de la cola al conectar y recargas agrupadas ante ráfagas; si el servidor rechaza el CONNECT vuelve al login y si rechaza la suscripción deja de reintentar y lo informa.
+  - Seguridad del WebSocket: JWT en el frame CONNECT/STOMP (`AutenticacionStompInterceptor`) y permisos por tópico (`PermisosSuscripcion`): el cocinero solo su estación, `/topic/items` para expedidor y admin, `/topic/pedidos` para todos; los clientes no envían mensajes. Se elimina el registro duplicado de `/ws` con SockJS.
+  - Ingreso por PIN: PIN propio por usuario de prueba (V9: mozo 1234, cocinero 5678, expedidor 9012); un PIN que comparten varios usuarios operativos se rechaza. Cada rol entra a su pantalla (`rutaInicio`) y una ruta sin permiso lo devuelve a ella.
+  - Criterio de Aceptación: Escenarios 1 a 6 de HU012; `PermisosSuscripcionTest`, `AutenticacionStompInterceptorTest`, `ItemCocinaMapperTest`, `CocinaServiceTest`, `AuthServiceTest`; smoke `smoke_hu012.cjs` 20/20 con Chrome y STOMP reales.

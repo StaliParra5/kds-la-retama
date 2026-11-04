@@ -65,4 +65,17 @@ class CocinaServiceTest {
         assertThrows(RecursoNoEncontradoException.class, () ->
                 service.colaDeEstacion(99L, new SesionKds("admin", "ADMIN", null)));
     }
+
+    @Test
+    @DisplayName("HU012 Escenario 5: Un ítem Listo (o despachado/anulado) ya no forma parte de la cola activa")
+    void cola_ExcluyeListoYFinales() {
+        when(estacionRepository.existsById(2L)).thenReturn(true);
+
+        service.colaDeEstacion(2L, new SesionKds("cocinero1", "COCINERO", 2L));
+
+        verify(detalleRepository).findByEstacionIdAndEstadoItemInOrderByPedidoFechaEnvioCocinaAscIdAsc(eq(2L),
+                argThat(estados -> !estados.contains(EstadoItem.LISTO)
+                        && !estados.contains(EstadoItem.DESPACHADO)
+                        && !estados.contains(EstadoItem.ANULADO)));
+    }
 }

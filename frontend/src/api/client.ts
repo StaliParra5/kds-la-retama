@@ -21,17 +21,22 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
+// Sesión vencida o inválida: se limpia y se vuelve al login (API REST y canal en tiempo real)
+export const cerrarSesionExpirada = () => {
+  localStorage.removeItem('kds_token');
+  localStorage.removeItem('kds_user');
+  // Redirigir a login si no estamos ya en la pantalla de autenticación
+  if (!window.location.pathname.includes('/login')) {
+    window.location.href = '/login';
+  }
+};
+
 // Interceptor de Respuesta: Maneja expiración de sesión y errores 401
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('kds_token');
-      localStorage.removeItem('kds_user');
-      // Redirigir a login si no estamos ya en la pantalla de autenticación
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
-      }
+      cerrarSesionExpirada();
     }
     return Promise.reject(error);
   },

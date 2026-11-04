@@ -11,9 +11,11 @@ import { AdminCanalesPage } from './pages/AdminCanalesPage';
 import { AdminEstacionesPage } from './pages/AdminEstacionesPage';
 import { AdminMesasPage } from './pages/AdminMesasPage';
 import { AdminProductosPage } from './pages/AdminProductosPage';
+import { CocinaPage } from './pages/CocinaPage';
 import { ComanderoPage } from './pages/ComanderoPage';
 import { LoginPage } from './pages/LoginPage';
 import type { RolCodigo } from './types';
+import { rutaInicio } from './utils/rutas';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,9 +29,11 @@ const queryClient = new QueryClient({
 interface ProtectedRouteProps {
   children: React.ReactElement;
   requiredRole?: RolCodigo;
+  // Roles operativos admitidos además del ADMIN (p. ej. la cocina admite COCINERO)
+  roles?: RolCodigo[];
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole, roles }) => {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
@@ -44,12 +48,21 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
     return <Navigate to="/login" replace />;
   }
 
-  // HU002: Control de acceso RBAC estricto
-  if (requiredRole && user.rol !== requiredRole && user.rol !== 'ADMIN') {
-    return <Navigate to="/comandero" replace />;
+  // HU002: Control de acceso RBAC estricto; sin permiso, cada rol vuelve a su pantalla de inicio
+  const permitidos = roles ?? (requiredRole ? [requiredRole] : null);
+  if (permitidos && user.rol !== 'ADMIN' && !permitidos.includes(user.rol)) {
+    return <Navigate to={rutaInicio(user.rol)} replace />;
   }
 
   return children;
+};
+
+const InicioPorRol: React.FC = () => {
+  const { user, isLoading } = useAuth();
+  if (isLoading) {
+    return null;
+  }
+  return <Navigate to={user ? rutaInicio(user.rol) : '/login'} replace />;
 };
 
 export default function App() {
@@ -68,6 +81,16 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <ComanderoPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* HU012 & HU014: Pantalla de la estación de cocina */}
+              <Route
+                path="/cocina"
+                element={
+                  <ProtectedRoute roles={['COCINERO']}>
+                    <CocinaPage />
                   </ProtectedRoute>
                 }
               />
@@ -112,8 +135,8 @@ export default function App() {
                 }
               />
 
-              {/* Redirección por defecto */}
-              <Route path="*" element={<Navigate to="/comandero" replace />} />
+              {/* Redirección por defecto a la pantalla de inicio del rol */}
+              <Route path="*" element={<InicioPorRol />} />
             </Routes>
           </BrowserRouter>
         </ToastProvider>

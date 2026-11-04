@@ -5,11 +5,14 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.List;
 
 /**
  * Proveedor y Validador Criptográfico de Tokens JWT.
@@ -64,6 +67,32 @@ public class JwtTokenProvider {
             // El token es inválido, manipulado o ha expirado
             return false;
         }
+    }
+
+    /**
+     * Autenticación de Spring a partir de un token válido, con autoridad 'ROLE_<ROL>' y la
+     * sesión KDS (rol y estación de la terminal) como detalles. Devuelve null si el token no es válido.
+     * La usan tanto las peticiones HTTP como la conexión STOMP del WebSocket.
+     */
+    public UsernamePasswordAuthenticationToken autenticar(String token) {
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        Claims claims;
+        try {
+            // Una sola verificación de firma y expiración por petición
+            claims = getClaims(token);
+        } catch (JwtException | IllegalArgumentException e) {
+            return null;
+        }
+        String username = claims.getSubject();
+        String role = claims.get("role", String.class);
+        String roleName = role.startsWith("ROLE_") ? role : "ROLE_" + role;
+        Long estacionId = claims.get("estacionId") instanceof Number n ? n.longValue() : null;
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(username, null, List.of(new SimpleGrantedAuthority(roleName)));
+        authentication.setDetails(new SesionKds(username, role, estacionId));
+        return authentication;
     }
 
     public String getUsernameFromToken(String token) {

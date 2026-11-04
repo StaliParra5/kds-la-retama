@@ -82,8 +82,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       username: data.username,
       nombreCompleto: data.nombreCompleto,
       rol: data.rol,
-      estacionId: data.estacionId || activeStation,
-      estacionNombre: data.estacionNombre || estacionNombre,
+      // Solo la estación que confirmó el servidor: es la que viaja en el JWT y la que autoriza la API
+      estacionId: data.estacionId,
+      estacionNombre: data.estacionNombre,
     };
 
     localStorage.setItem('kds_token', data.token);

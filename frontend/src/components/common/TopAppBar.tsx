@@ -79,6 +79,23 @@ export const TopAppBar: React.FC = () => {
           <span>Comandero</span>
         </NavLink>
 
+        {/* Pantalla de Estación de Cocina (HU012 & HU014) */}
+        {(isAdmin || user?.rol === 'COCINERO') && (
+          <NavLink
+            to="/cocina"
+            className={({ isActive }) =>
+              `flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                isActive
+                  ? 'bg-primary text-on-primary shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+              }`
+            }
+          >
+            <span className="material-symbols-outlined text-[18px]">skillet</span>
+            <span>Cocina</span>
+          </NavLink>
+        )}
+
         {/* Módulos Administrativos (HU003, HU004, HU005, HU023, HU037) */}
         {isAdmin && (
           <>

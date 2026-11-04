@@ -1,42 +1,5 @@
 // Smoke HU011: enrutamiento por estación verificado con suscriptores STOMP reales (WebSocket nativo de Node)
-const API = 'http://localhost:8080/api/v1';
-const WS = 'ws://localhost:8080/ws';
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function http(method, path, token, body) {
-  const res = await fetch(`${API}${path}`, {
-    method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
-  return { status: res.status, data: text ? JSON.parse(text) : null };
-}
-const login = async (ep, body) => (await http('POST', `/auth/${ep}`, null, body)).data.token;
-
-// Cliente STOMP mínimo: CONNECT + SUBSCRIBE y acumulación de mensajes por destino
-function stompSuscriptor(destinos, token) {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(WS);
-    const recibidos = Object.fromEntries(destinos.map((d) => [d, []]));
-    ws.onerror = (e) => reject(new Error(`WebSocket: ${e.message || 'error'}`));
-    ws.onopen = () => ws.send(`CONNECT\naccept-version:1.2\nheart-beat:0,0\nAuthorization:Bearer ${token}\n\n\0`);
-    ws.onmessage = (ev) => {
-      for (const frame of String(ev.data).split('\0').filter((f) => f.trim())) {
-        const [cabecera, ...cuerpo] = frame.split('\n\n');
-        const lineas = cabecera.trim().split('\n');
-        if (lineas[0] === 'CONNECTED') {
-          destinos.forEach((d, i) => ws.send(`SUBSCRIBE\nid:sub-${i}\ndestination:${d}\n\n\0`));
-          setTimeout(() => resolve({ ws, recibidos }), 300);
-        } else if (lineas[0] === 'MESSAGE') {
-          const dest = lineas.find((l) => l.startsWith('destination:')).slice(12);
-          recibidos[dest]?.push(JSON.parse(cuerpo.join('\n\n')));
-        } else if (lineas[0] === 'ERROR') {
-          reject(new Error(frame));
-        }
-      }
-    };
-  });
-}
+const { sleep, http, login, stompSuscriptor } = require('./lib.cjs');
 
 (async () => {
   const results = [];
@@ -51,7 +14,8 @@ function stompSuscriptor(destinos, token) {
     const platoDe = (codigo, n = 0) => platos.filter((p) => p.estacionId === id(codigo))[n];
 
     const tops = ['PLANCHA', 'FRIOS', 'CALIENTES', 'BEBIDAS'].map((c) => `/topic/estacion/${id(c)}`);
-    const sub = await stompSuscriptor([...tops, '/topic/pedidos'], mozo);
+    // Monitor general: solo admin/expedidor escuchan todas las estaciones (HU012)
+    const sub = await stompSuscriptor([...tops, '/topic/pedidos'], admin);
     ws = sub.ws;
     const rec = sub.recibidos;
     const [tPlancha, tFrios, tCalientes, tBebidas] = tops;
@@ -83,7 +47,7 @@ function stompSuscriptor(destinos, token) {
     check('Esc.2 solo Bebidas recibe el pedido de una estación', deSolo(tBebidas) === 1 && deSolo(tPlancha) + deSolo(tFrios) + deSolo(tCalientes) === 0);
 
     // Esc. 4: la pantalla de Fríos "estaba apagada": consulta su cola al conectarse
-    const cocFrios = await login('login-pin', { username: 'cocinero1', pin: '1234', estacionId: id('FRIOS') });
+    const cocFrios = await login('login-pin', { username: 'cocinero1', pin: '5678', estacionId: id('FRIOS') });
     const cola = await http('GET', `/estaciones/${id('FRIOS')}/cola`, cocFrios);
     check('Esc.4 la cola de Fríos contiene el ítem enrutado sin pantalla conectada', cola.status === 200 && cola.data.some((i) => i.codigoPedido === codigo));
     check('Esc.4 la cola de Fríos no contiene ítems de otras estaciones', cola.data.every((i) => i.estacionId === id('FRIOS')));

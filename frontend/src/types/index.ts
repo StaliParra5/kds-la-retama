@@ -118,3 +118,35 @@ export interface PedidoResponse {
   createdAt: string;
   items: DetallePedidoResponse[];
 }
+
+// Sprint 2: ciclo de vida del ítem (HU013) y pantallas de cocina/pase (HU012, HU014)
+export type EstadoItem =
+  | 'RECIBIDO'
+  | 'EN_ESPERA'
+  | 'EN_PREPARACION'
+  | 'LISTO'
+  | 'DESPACHADO'
+  | 'ANULADO';
+
+export interface ItemCocina {
+  id: number;
+  version: number;
+  estado: EstadoItem;
+  cantidad: number;
+  platoNombre: string;
+  modificadores?: string | null;
+  tiempoEstandarMinutos: number;
+  horaDisparo?: string | null;
+  creadoEn: string;
+  estacionId: number;
+  estacionNombre: string;
+  pedidoId: number;
+  codigoPedido: string;
+  estadoPedido: string;
+  canalCodigo: string;
+  canalNombre: string;
+  canalSlaMinutos: number;
+  mesaNumero?: string | null;
+  fechaEnvioCocina: string;
+  itemsEnOtrasEstaciones: number;
+}

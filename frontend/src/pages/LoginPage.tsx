@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LaRetamaWatermark } from '../components/common/LaRetamaWatermark';
 import { useAuth } from '../context/AuthContext';
+import { rutaInicio } from '../utils/rutas';
 
 export const LoginPage: React.FC = () => {
   const { loginAdmin, loginPin } = useAuth();
@@ -70,12 +71,8 @@ export const LoginPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       const sesion = await loginPin(pinValue);
-      // Enrutamiento basado en roles operativos (HU001 & HU002)
-      if (sesion.rol === 'ADMIN') {
-        navigate('/admin/platos');
-      } else {
-        navigate('/comandero');
-      }
+      // Enrutamiento basado en roles operativos (HU001 & HU002): cada rol entra a su puesto
+      navigate(rutaInicio(sesion.rol));
     } catch (err: any) {
       const msg =
         err.response?.data?.mensaje || 'PIN incorrecto o no autorizado para esta estación.';
@@ -95,8 +92,8 @@ export const LoginPage: React.FC = () => {
     setErrorMsg(null);
     setIsSubmitting(true);
     try {
-      await loginAdmin(username.trim(), password);
-      navigate('/admin/platos');
+      const sesion = await loginAdmin(username.trim(), password);
+      navigate(rutaInicio(sesion.rol));
     } catch (err: any) {
       const msg = err.response?.data?.mensaje || 'Credenciales administrativas inválidas.';
       setErrorMsg(msg);

@@ -83,12 +83,21 @@ public class AuthService {
             }
         } else {
             // Escaneo táctil ágil: Buscar coincidencia entre usuarios operativos activos
-            List<Usuario> usuarios = usuarioRepository.findByActivoTrue();
-            for (Usuario u : usuarios) {
-                if (u.getPinHash() != null && passwordEncoder.matches(request.getPin(), u.getPinHash())) {
-                    usuarioEncontrado = u;
-                    break;
-                }
+            List<Usuario> coincidencias = usuarioRepository.findByActivoTrue().stream()
+                    .filter(u -> u.getPinHash() != null && passwordEncoder.matches(request.getPin(), u.getPinHash()))
+                    .toList();
+            // El admin nunca entra por PIN, así que no cuenta para decidir si el PIN es ambiguo
+            List<Usuario> operativos = coincidencias.stream()
+                    .filter(u -> !"ADMIN".equalsIgnoreCase(u.getRol().getCodigo()))
+                    .toList();
+            // Un PIN compartido no identifica a nadie: entrar como el primero sería suplantar al resto
+            if (operativos.size() > 1) {
+                throw new BadCredentialsException("Este PIN lo comparten varios usuarios. Pida al administrador un PIN propio.");
+            }
+            if (!operativos.isEmpty()) {
+                usuarioEncontrado = operativos.get(0);
+            } else if (!coincidencias.isEmpty()) {
+                usuarioEncontrado = coincidencias.get(0);
             }
         }
 

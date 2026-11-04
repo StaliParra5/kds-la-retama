@@ -128,4 +128,35 @@ class AuthServiceTest {
         assertThrows(BadCredentialsException.class, () ->
                 authService.loginPin(new PinAuthRequest("1234", null)));
     }
+
+    @Test
+    @DisplayName("HU001: Un PIN que comparten dos usuarios no inicia sesión como ninguno de ellos")
+    void loginPin_PinCompartido_EsRechazado() {
+        Usuario mozo = new Usuario();
+        mozo.setUsername("angie");
+        mozo.setPinHash("hashedPinMozo");
+        mozo.setRol(new Rol(3L, "MOZO", "Mozo", "Salón"));
+        mozo.setActivo(true);
+        when(usuarioRepository.findByActivoTrue()).thenReturn(List.of(mozo, cocineroUser));
+        when(passwordEncoder.matches("1234", "hashedPinMozo")).thenReturn(true);
+        when(passwordEncoder.matches("1234", "hashedPin")).thenReturn(true);
+
+        assertThrows(BadCredentialsException.class, () ->
+                authService.loginPin(new PinAuthRequest("1234", 10L)));
+        verifyNoInteractions(tokenProvider);
+    }
+
+    @Test
+    @DisplayName("HU001: Si el admin tiene el mismo PIN que un operativo, el operativo sigue entrando")
+    void loginPin_CoincideConAdmin_NoEsAmbiguo() {
+        adminUser.setPinHash("hashedPinAdmin");
+        when(usuarioRepository.findByActivoTrue()).thenReturn(List.of(adminUser, cocineroUser));
+        when(passwordEncoder.matches("1234", "hashedPinAdmin")).thenReturn(true);
+        when(passwordEncoder.matches("1234", "hashedPin")).thenReturn(true);
+        when(tokenProvider.generateToken(2L, "cocinero1", "COCINERO", null)).thenReturn("cocina-jwt-token");
+
+        AuthResponse response = authService.loginPin(new PinAuthRequest("1234", null));
+
+        assertEquals("COCINERO", response.getRol());
+    }
 }

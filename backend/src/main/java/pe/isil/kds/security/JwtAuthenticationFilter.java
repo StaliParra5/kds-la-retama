@@ -5,15 +5,12 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
 
 /**
  * Filtro de Seguridad JWT por Petición HTTP.
@@ -38,22 +35,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
 
-        String token = resolveToken(request);
-
-        if (StringUtils.hasText(token) && tokenProvider.validateToken(token)) {
-            String username = tokenProvider.getUsernameFromToken(token);
-            String role = tokenProvider.getRoleFromToken(token);
-
-            String roleName = role.startsWith("ROLE_") ? role : "ROLE_" + role;
-            List<SimpleGrantedAuthority> authorities = Collections.singletonList(
-                    new SimpleGrantedAuthority(roleName)
-            );
-
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(username, null, authorities);
-            // Detalles de sesión KDS: rol y estación vinculada a la terminal (si la hay)
-            authentication.setDetails(new SesionKds(username, role, tokenProvider.getEstacionIdFromToken(token)));
-
+        UsernamePasswordAuthenticationToken authentication = tokenProvider.autenticar(resolveToken(request));
+        if (authentication != null) {
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 
