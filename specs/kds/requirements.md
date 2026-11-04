@@ -62,6 +62,18 @@ El sistema KDS (Kitchen Display System) es una solución modular cliente-servido
 - **HU031 - Agregar ítems a comanda enviada** (KDSG5-31)
 - **HU032 - Anular ítem con motivo** (KDSG5-32)
 
+Solicitud del PO del 2026-11-03 (Bloque 3; HU008, HU030, HU031 y HU032 pasan al Bloque 4):
+- **HU039 - Comandero exclusivo del mozo** (KDSG5-316)
+- **HU040 - Administrar zonas del salón** (KDSG5-317)
+- **HU041 - Editar mesas** (KDSG5-318)
+- **HU042 - Gestionar mozos** (KDSG5-319)
+- **HU043 - Asignar mozos a zonas** (KDSG5-320)
+- **HU044 - Abrir la mesa antes del comandero** (KDSG5-321)
+- **HU045 - Datos del cliente para llevar** (KDSG5-322)
+- **HU046 - Liberar mesa** (KDSG5-323)
+- **HU047 - Configurar semáforo de mesas** (KDSG5-324)
+- **HU048 - Vista de salón para el administrador** (KDSG5-325)
+
 ### 3.3 Decisiones de Producto del Sprint 2 (aprobadas el 2026-11-03)
 Decisiones que completan los criterios de Jira donde eran ambiguos o dependían de HU fuera del sprint.
 
@@ -82,6 +94,19 @@ Decisiones que completan los criterios de Jira donde eran ambiguos o dependían 
 | D13 | Modificadores (HU008) | Tabla `plato_modificadores` editable en el formulario del plato; el comandero muestra solo los del plato y se elimina el texto libre por ítem (se mantiene la observación general). |
 | D14 | Agotados (HU030) | Aviso en menos de 5 s por WebSocket; los pedidos externos quedan cubiertos por la misma validación del servidor. |
 | D15 | Jira | El inicio del sprint en el tablero queda a cargo del equipo. |
+
+### 3.4 Decisiones del Bloque 3 (solicitud del PO, aprobadas el 2026-11-04)
+Los escenarios completos de HU039 a HU048 están en Jira (KDSG5-316 a KDSG5-325).
+
+| ID | Tema | Decisión |
+|---|---|---|
+| D16 | Comandero (HU039) | Solo el rol Mozo: Cocinero, Expedidor y Administrador no lo ven ni pueden registrar pedidos (403 en `POST /pedidos`). |
+| D17 | Zonas (HU040) | Se reutiliza la entidad `Zona`. Se crean, editan, desactivan y reactivan; por ahora no se eliminan. No se desactiva una zona con mesas en atención. |
+| D18 | Asignación de zonas (HU043) | Restrictiva: el mozo solo ve y opera las mesas de sus zonas, validado también en el servidor. Un mozo sin zonas solo registra pedidos para llevar. |
+| D19 | Atención de mesa (HU044, HU046) | Abrir una mesa crea una atención (mozo, personas, hora). Los pedidos de salón cuelgan de la atención abierta. La mesa vuelve a libre cuando un mozo de su zona la libera, solo si no quedan ítems pendientes. |
+| D20 | Para llevar (HU045) | Nombre y celular obligatorios (9 dígitos, empieza en 9). Delivery no cambia por ahora. |
+| D21 | Semáforo de mesas (HU047, HU048) | Gris libre; verde, amarillo (≥ 20 min) y rojo (≥ 30 min) según la espera del pedido pendiente más antiguo desde su envío a cocina; azul "Atendida" si todo fue despachado y la mesa no se libera. Umbrales configurables por el admin. |
+| D22 | Vista de salón (HU048) | Solo lectura y solo administrador. El detalle muestra el mozo que abrió y los mozos de la zona, personas, tiempo y pedidos con el estado de cada ítem. |
 
 ---
 

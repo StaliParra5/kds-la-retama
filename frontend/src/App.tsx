@@ -32,9 +32,16 @@ interface ProtectedRouteProps {
   requiredRole?: RolCodigo;
   // Roles operativos admitidos además del ADMIN (p. ej. la cocina admite COCINERO)
   roles?: RolCodigo[];
+  // Pantallas que ni el ADMIN abre (HU039: el comandero es solo del mozo)
+  exclusiva?: boolean;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole, roles }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
+  children,
+  requiredRole,
+  roles,
+  exclusiva = false,
+}) => {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
@@ -51,7 +58,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole,
 
   // HU002: Control de acceso RBAC estricto; sin permiso, cada rol vuelve a su pantalla de inicio
   const permitidos = roles ?? (requiredRole ? [requiredRole] : null);
-  if (permitidos && user.rol !== 'ADMIN' && !permitidos.includes(user.rol)) {
+  const adminPasa = user.rol === 'ADMIN' && !exclusiva;
+  if (permitidos && !adminPasa && !permitidos.includes(user.rol)) {
     return <Navigate to={rutaInicio(user.rol)} replace />;
   }
 
@@ -76,11 +84,11 @@ export default function App() {
               {/* HU001: Autenticación por PIN y Credenciales */}
               <Route path="/login" element={<LoginPage />} />
 
-              {/* HU006 & HU007: Comandero de Sala */}
+              {/* HU006 & HU007: Comandero de Sala, exclusivo del mozo (HU039) */}
               <Route
                 path="/comandero"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute roles={['MOZO']} exclusiva>
                     <ComanderoPage />
                   </ProtectedRoute>
                 }

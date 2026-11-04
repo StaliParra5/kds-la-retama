@@ -2,7 +2,7 @@
 # Smoke HU009 - Enviar comanda a cocina contra la API real
 source "$(dirname "$0")/lib.sh"
 
-MOZO=$(token_mozo); ADM=$(token_admin)
+MOZO=$(token_mozo); MOZO2=$(token_mozo2); ADM=$(token_admin)
 PLATO=$(curl -s $B/platos -H "Authorization: Bearer $MOZO" | json "[p['id'] for p in d if p['disponible']][0]")
 contar() { docker exec kds-postgres psql -U kds_user -d kds_db -tAc "SELECT COUNT(*) FROM pedidos WHERE clave_idempotencia='$1'"; }
 
@@ -30,10 +30,12 @@ rm -rf "$TMP"
 # Revisión: la clave pertenece a su autor y a su contenido
 BODY3="{\"claveIdempotencia\":\"$CLAVE\",\"canalId\":3,\"items\":[{\"platoId\":$PLATO,\"cantidad\":5}]}"
 check "Clave reutilizada con otro contenido (409)" "$(api "$MOZO" POST /pedidos "$BODY3" | cut -d' ' -f1)" "409"
-check "Clave de otro usuario no revela el pedido (409)" "$(api "$ADM" POST /pedidos "$BODY" | cut -d' ' -f1)" "409"
+check "Clave de otro mozo no revela el pedido (409)" "$(api "$MOZO2" POST /pedidos "$BODY" | cut -d' ' -f1)" "409"
+check "HU039 un usuario que no es mozo no registra pedidos (403)" "$(api "$ADM" POST /pedidos "$BODY" | cut -d' ' -f1)" "403"
 check "Esc.2 el autor consulta si su envío llegó (200)" "$(api "$MOZO" GET /pedidos/envio/$CLAVE | cut -d' ' -f1)" "200"
 check "Esc.2 envío inexistente (404)" "$(api "$MOZO" GET /pedidos/envio/cmd-noexiste123 | cut -d' ' -f1)" "404"
-check "Otro usuario no puede consultar el envío (404)" "$(api "$ADM" GET /pedidos/envio/$CLAVE | cut -d' ' -f1)" "404"
+check "Otro mozo no puede consultar el envío (404)" "$(api "$MOZO2" GET /pedidos/envio/$CLAVE | cut -d' ' -f1)" "404"
+check "HU039 quien no es mozo no consulta envíos (403)" "$(api "$ADM" GET /pedidos/envio/$CLAVE | cut -d' ' -f1)" "403"
 
 check "Esc.3 comanda vacía rechazada (400)" "$(api "$MOZO" POST /pedidos '{"canalId":3,"items":[]}' | cut -d' ' -f1)" "400"
 check "Esc.3 mensaje indica agregar un plato" "$(api "$MOZO" POST /pedidos '{"canalId":3,"items":[]}' | cut -d' ' -f2- | json "'al menos un plato' in d['mensaje']")" "True"

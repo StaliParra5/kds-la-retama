@@ -301,3 +301,10 @@
   - El expedidor entra con su PIN directo al pase; la ruta `/pase` queda permitida en Spring Security como las demás rutas de la SPA.
   - Utilidades comunes de cocina y pase en `src/utils/cocina.ts` y recarga agrupada ante ráfagas en `useRecargaAgrupada`.
   - Criterio de Aceptación: `CocinaServiceTest`, `ItemCocinaMapperTest`; smoke `smoke_hu013_pase.cjs` 14/14.
+
+### Bloque 3: Solicitud del PO (HU039–HU048, decisiones D16–D22)
+
+- [x] **TASK-059 [FULL] [F1] Comandero exclusivo del mozo (HU039, D16)**
+  - `POST /api/v1/pedidos` exige el rol Mozo (`@PreAuthorize("hasRole('MOZO')")`): cocina, pase y administración reciben 403.
+  - El enlace "Comandero" solo aparece al mozo; la ruta `/comandero` usa `ProtectedRoute` con `exclusiva`, que tampoco deja pasar al ADMIN, y devuelve a cada rol a su inicio.
+  - Criterio de Aceptación: Escenarios 1 a 4 de HU039; `PedidoControllerTest`; smoke `smoke_hu039.cjs` 14/14 (`smoke_hu009.sh` ahora comprueba el 403 del admin).

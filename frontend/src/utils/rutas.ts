@@ -9,7 +9,10 @@ export const rutaInicio = (rol: RolCodigo | undefined): string => {
       return '/cocina';
     case 'EXPEDIDOR':
       return '/pase';
-    default:
+    case 'MOZO':
       return '/comandero';
+    // Un rol desconocido no tiene pantalla propia: volver a /comandero entraría en un bucle de redirecciones
+    default:
+      return '/login';
   }
 };

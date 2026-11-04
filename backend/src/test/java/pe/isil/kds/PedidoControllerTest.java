@@ -3,10 +3,14 @@ package pe.isil.kds;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import pe.isil.kds.controller.PedidoController;
+import pe.isil.kds.dto.CrearPedidoRequest;
 
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -39,5 +43,15 @@ class PedidoControllerTest {
             assertFalse(operacion.startsWith(RequestMethod.PUT.name()) || operacion.startsWith(RequestMethod.PATCH.name())
                     || operacion.startsWith(RequestMethod.DELETE.name()), operacion);
         }
+    }
+
+    @Test
+    @DisplayName("HU039 Escenario 3: Solo el mozo puede registrar pedidos")
+    void registrarPedido_SoloMozo() throws NoSuchMethodException {
+        Method abrir = PedidoController.class.getMethod("abrirComanda", CrearPedidoRequest.class, Authentication.class);
+        PreAuthorize permiso = abrir.getAnnotation(PreAuthorize.class);
+
+        assertNotNull(permiso, "El registro de pedidos debe exigir un rol");
+        assertEquals("hasRole('MOZO')", permiso.value());
     }
 }

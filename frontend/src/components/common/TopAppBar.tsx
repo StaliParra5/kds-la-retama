@@ -64,20 +64,22 @@ export const TopAppBar: React.FC = () => {
 
       {/* Centro: Pestañas de Navegación Contextual (Filtradas por Rol HU002) */}
       <nav className="flex items-center gap-1.5 overflow-x-auto py-1">
-        {/* Comandero (HU006 & HU007) */}
-        <NavLink
-          to="/comandero"
-          className={({ isActive }) =>
-            `flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-              isActive
-                ? 'bg-primary text-on-primary shadow-sm'
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
-            }`
-          }
-        >
-          <span className="material-symbols-outlined text-[18px]">receipt_long</span>
-          <span>Comandero</span>
-        </NavLink>
+        {/* Comandero (HU006 & HU007): exclusivo del mozo (HU039) */}
+        {user?.rol === 'MOZO' && (
+          <NavLink
+            to="/comandero"
+            className={({ isActive }) =>
+              `flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                isActive
+                  ? 'bg-primary text-on-primary shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+              }`
+            }
+          >
+            <span className="material-symbols-outlined text-[18px]">receipt_long</span>
+            <span>Comandero</span>
+          </NavLink>
+        )}
 
         {/* Pantalla de Estación de Cocina (HU012 & HU014) */}
         {(isAdmin || user?.rol === 'COCINERO') && (

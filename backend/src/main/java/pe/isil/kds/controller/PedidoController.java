@@ -35,13 +35,12 @@ public class PedidoController {
     }
 
     @Operation(summary = "Registrar y enviar la comanda a cocina en una sola acción (HU006, HU009)")
+    // HU039: el comandero es exclusivo del mozo; cocina, pase y administración no registran pedidos
+    @PreAuthorize("hasRole('MOZO')")
     @PostMapping
     public ResponseEntity<PedidoResponse> abrirComanda(
             @Valid @RequestBody CrearPedidoRequest request,
             Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new org.springframework.security.authentication.BadCredentialsException("Debe contar con una sesión activa para abrir una comanda.");
-        }
         String username = authentication.getName();
         try {
             // HU009 Esc. 2 y 5: una clave ya registrada devuelve el mismo pedido (200); uno nuevo responde 201
@@ -60,6 +59,7 @@ public class PedidoController {
     }
 
     @Operation(summary = "Consultar si un envío sin confirmación llegó al servidor, por su clave (HU009)")
+    @PreAuthorize("hasRole('MOZO')")
     @GetMapping("/envio/{clave}")
     public ResponseEntity<PedidoResponse> consultarEnvio(@PathVariable String clave, Authentication authentication) {
         return ResponseEntity.ok(pedidoService.consultarEnvio(clave, authentication.getName()));
@@ -85,6 +85,7 @@ public class PedidoController {
     }
 
     @Operation(summary = "Obtener sugerencia del siguiente correlativo diario único (HU006)")
+    @PreAuthorize("hasRole('MOZO')")
     @GetMapping("/correlativo-siguiente")
     public ResponseEntity<Map<String, String>> obtenerSiguienteCorrelativo() {
         String correlativo = pedidoService.obtenerSiguienteCorrelativoSugerido();

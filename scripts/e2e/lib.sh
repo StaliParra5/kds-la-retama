@@ -7,6 +7,13 @@ json() { python -c "import sys,json;d=json.load(sys.stdin);print(eval(sys.argv[1
 token_admin()     { curl -s -X POST $B/auth/login-admin -H 'Content-Type: application/json' -d '{"username":"admin","password":"admin123"}' | json "d['token']"; }
 token_expedidor() { curl -s -X POST $B/auth/login-admin -H 'Content-Type: application/json' -d '{"username":"expedidor1","password":"1234"}' | json "d['token']"; }
 token_mozo()      { curl -s -X POST $B/auth/login-pin -H 'Content-Type: application/json' -d '{"username":"angie","pin":"1234"}' | json "d['token']"; }
+# Segundo mozo solo para pruebas (sin PIN, entra con contraseña 1234): se crea si no existe
+token_mozo2() {
+  docker exec kds-postgres psql -U kds_user -d kds_db -qtAc "INSERT INTO usuarios (username, password_hash, pin_hash, nombre, apellido, rol_id, activo)
+    SELECT 'mozo_smoke', password_hash, NULL, 'Mozo', 'Prueba', rol_id, TRUE FROM usuarios WHERE username = 'angie'
+    ON CONFLICT (username) DO NOTHING" >/dev/null
+  curl -s -X POST $B/auth/login-admin -H 'Content-Type: application/json' -d '{"username":"mozo_smoke","password":"1234"}' | json "d['token']"
+}
 # $1 = estacionId vinculada a la terminal
 token_cocinero()  { curl -s -X POST $B/auth/login-pin -H 'Content-Type: application/json' -d "{\"username\":\"cocinero1\",\"pin\":\"5678\",\"estacionId\":$1}" | json "d['token']"; }
 
