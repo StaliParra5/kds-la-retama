@@ -12,6 +12,7 @@ import { AdminEstacionesPage } from './pages/AdminEstacionesPage';
 import { AdminMesasPage } from './pages/AdminMesasPage';
 import { AdminMozosPage } from './pages/AdminMozosPage';
 import { AdminProductosPage } from './pages/AdminProductosPage';
+import { AdminSalonPage } from './pages/AdminSalonPage';
 import { CocinaPage } from './pages/CocinaPage';
 import { ComanderoPage } from './pages/ComanderoPage';
 import { LoginPage } from './pages/LoginPage';
@@ -141,6 +142,16 @@ export default function App() {
                 element={
                   <ProtectedRoute requiredRole="ADMIN">
                     <AdminMesasPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* HU047 & HU048: Vista de salón y semáforo de mesas */}
+              <Route
+                path="/admin/salon"
+                element={
+                  <ProtectedRoute requiredRole="ADMIN">
+                    <AdminSalonPage />
                   </ProtectedRoute>
                 }
               />

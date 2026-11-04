@@ -67,6 +67,33 @@ export interface AtencionMesa {
   pedidos: PedidoResponse[];
 }
 
+// HU047/HU048: semáforo de mesas y vista de salón del administrador
+export interface Semaforo {
+  minutosAmarillo: number;
+  minutosRojo: number;
+}
+
+export type EstadoMesaSalon = 'LIBRE' | 'VERDE' | 'AMARILLO' | 'ROJO' | 'ATENDIDA';
+
+export interface MesaSalon {
+  id: number;
+  numeroMesa: string;
+  capacidad: number;
+  estado: EstadoMesaSalon;
+  atencionId?: number | null;
+  personas?: number | null;
+  mozoNombre?: string | null;
+  abiertaEn?: string | null;
+  minutosEspera?: number | null;
+  itemsPendientes: number;
+}
+
+export interface VistaSalon {
+  semaforo: Semaforo;
+  generadoEn: string;
+  zonas: { id: number; nombre: string; mozos: string[]; mesas: MesaSalon[] }[];
+}
+
 // HU042: mozo gestionado por el administrador (nunca viaja el PIN)
 export interface Mozo {
   id: number;

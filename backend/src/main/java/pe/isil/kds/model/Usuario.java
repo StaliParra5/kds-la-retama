@@ -91,6 +91,9 @@ public class Usuario {
     public java.util.Set<Zona> getZonas() { return zonas; }
     public void setZonas(java.util.Set<Zona> zonas) { this.zonas = zonas; }
 
+    // Nombre para mostrar en pantallas, acuses y mensajes
+    public String getNombreCompleto() { return nombre + " " + apellido; }
+
     public Integer getVersionSesion() { return versionSesion; }
     public void setVersionSesion(Integer versionSesion) { this.versionSesion = versionSesion; }
 

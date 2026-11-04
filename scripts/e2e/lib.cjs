@@ -71,4 +71,27 @@ async function crearMozo(tokenAdmin, datos) {
   throw new Error('no se encontró un PIN libre');
 }
 
-module.exports = { API, WS, sleep, http, login, loginCompleto, stompSuscriptor, vaciarCola, crearMozo };
+// Cierra una mesa abierta por una prueba (HU046): despacha lo que quede en cocina y la libera.
+// Debe llamarse antes de desactivar al mozo, porque desactivarlo revoca su sesión.
+async function cerrarMesa(mesaId, tokenMozo, tokenAdmin) {
+  const atencion = await http('GET', `/mesas/${mesaId}/atencion`, tokenAdmin);
+  if (atencion.status !== 200) return;
+  const expedidor = await login('login-pin', { username: 'expedidor1', pin: '9012' });
+  const cocineros = new Map();
+  for (const item of atencion.data.pedidos.flatMap((p) => p.items)) {
+    let estado = item.estadoItem;
+    if (estado === 'DESPACHADO' || estado === 'ANULADO') continue;
+    if (!cocineros.has(item.estacionId)) {
+      cocineros.set(item.estacionId, await login('login-pin', { username: 'cocinero1', pin: '5678', estacionId: item.estacionId }));
+    }
+    const cocinero = cocineros.get(item.estacionId);
+    for (const [destino, token] of [['EN_PREPARACION', cocinero], ['LISTO', cocinero], ['DESPACHADO', expedidor]]) {
+      const r = await http('PATCH', `/items/${item.id}/estado`, token, { estadoActual: estado, estadoDestino: destino, inicioAnticipado: true });
+      if (r.status === 200) estado = destino;
+    }
+  }
+  const liberada = await http('POST', `/mesas/${mesaId}/atencion/liberar`, tokenMozo);
+  if (liberada.status !== 200) console.warn(`No se pudo liberar la mesa ${mesaId}: ${liberada.status} ${liberada.data?.mensaje}`);
+}
+
+module.exports = { API, WS, sleep, http, login, loginCompleto, stompSuscriptor, vaciarCola, crearMozo, cerrarMesa };

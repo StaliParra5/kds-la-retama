@@ -342,3 +342,10 @@
   - `POST /pedidos` con canal Para llevar exige nombre y celular peruano (9 dígitos, empieza en 9); el servidor guarda los datos sin espacios al borde, limita su largo (400 en vez de error de BD), no los guarda en Salón y los considera en la idempotencia. Delivery no cambia.
   - `SeleccionDestino`: Para llevar pide nombre y celular antes de la carta; el comandero muestra al cliente en el encabezado y en el acuse junto al código, y tras enviar vuelve a pedir el siguiente cliente. Cocina y pase muestran el nombre en la tarjeta del pedido (`clienteNombre` en `ItemCocinaDto`).
   - Criterio de Aceptación: Escenarios 1 a 5 de HU045; `PedidoServiceTest`; smoke `smoke_hu045.cjs` 15/15.
+
+- [x] **TASK-065 [FULL] [F1] Semáforo de mesas y Vista de Salón (HU047, HU048, D21, D22)**
+  - Tabla `configuracion_semaforo` (V15, fila única, 20/30 por defecto). API Admin `GET`/`PUT /api/v1/salon/semaforo` (amarillo > 0 y rojo > amarillo).
+  - `GET /api/v1/salon` (Admin): zonas activas con sus mozos activos y sus mesas; cada mesa trae su estado (LIBRE, VERDE, AMARILLO, ROJO, ATENDIDA), los minutos de espera del pedido pendiente más antiguo desde su envío a cocina, personas, mozo que la abrió y hora de apertura. Atenciones y pedidos se cargan en dos consultas.
+  - `AdminSalonPage` en `/admin/salon` (enlace "Salón"): grilla por zona con leyenda de umbrales, filtro por zona, en vivo por `/topic/pedidos` y `/topic/items` más recarga cada 4 s (aperturas y liberaciones); detalle lateral de solo lectura con mozos, personas, tiempos y pedidos con el estado de cada ítem; diálogo "Semáforo".
+  - Pruebas de humo: helper `cerrarMesa` en `lib.cjs` para dejar las mesas libres al terminar, también si la prueba falla.
+  - Criterio de Aceptación: Escenarios 1 a 4 de HU047 y 1 a 6 de HU048; `SalonServiceTest`; smoke `smoke_hu047_048.cjs` 26/26.

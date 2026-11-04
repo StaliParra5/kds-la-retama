@@ -118,6 +118,21 @@ export const TopAppBar: React.FC = () => {
         {/* Módulos Administrativos (HU003, HU004, HU005, HU023, HU037) */}
         {isAdmin && (
           <>
+            {/* HU048: Vista de salón (solo lectura) */}
+            <NavLink
+              to="/admin/salon"
+              className={({ isActive }) =>
+                `flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                  isActive
+                    ? 'bg-primary text-on-primary shadow-sm'
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+                }`
+              }
+            >
+              <span className="material-symbols-outlined text-[18px]">grid_view</span>
+              <span>Salón</span>
+            </NavLink>
+
             <NavLink
               to="/admin/platos"
               className={({ isActive }) =>

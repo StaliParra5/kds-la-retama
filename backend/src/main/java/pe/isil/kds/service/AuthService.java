@@ -63,7 +63,7 @@ public class AuthService {
                 token,
                 usuario.getId(),
                 usuario.getUsername(),
-                usuario.getNombre() + " " + usuario.getApellido(),
+                usuario.getNombreCompleto(),
                 rolCodigo,
                 null,
                 null
@@ -129,7 +129,7 @@ public class AuthService {
                 token,
                 usuarioEncontrado.getId(),
                 usuarioEncontrado.getUsername(),
-                usuarioEncontrado.getNombre() + " " + usuarioEncontrado.getApellido(),
+                usuarioEncontrado.getNombreCompleto(),
                 rolCodigo,
                 estacionId,
                 estacionNombre
@@ -145,7 +145,7 @@ public class AuthService {
                 null,
                 usuario.getId(),
                 usuario.getUsername(),
-                usuario.getNombre() + " " + usuario.getApellido(),
+                usuario.getNombreCompleto(),
                 usuario.getRol().getCodigo(),
                 null,
                 null

@@ -32,13 +32,13 @@ async function despacharItem(item, expedidor) {
   });
   const errors = [];
   let zonasOriginalesAngie = null;
+  const sufijo = String(Date.now()).slice(-6);
 
   try {
     const admin = await loginCompleto('login-admin', { username: 'admin', password: 'admin123' });
     const mozo = await login('login-pin', { username: 'angie', pin: '1234' });
     const expedidor = await login('login-pin', { username: 'expedidor1', pin: '9012' });
     const A = admin.token;
-    const sufijo = String(Date.now()).slice(-6);
     const zonasMozo = async () => (await http('GET', '/zonas', mozo)).data;
 
     // --- HU040: zonas
@@ -47,7 +47,8 @@ async function despacharItem(item, expedidor) {
     const zonaId = creada.data.id;
     // HU043: el mozo solo ve las zonas asignadas; se le agrega la nueva y al final se restaura su asignación
     const angie = (await http('GET', '/mozos', A)).data.find((m) => m.username === 'angie');
-    zonasOriginalesAngie = { id: angie.id, zonaIds: angie.zonas.filter((z) => z.activo).map((z) => z.id) };
+    // Zonas de pruebas anteriores (terminan en 6 dígitos) no se restauran
+    zonasOriginalesAngie = { id: angie.id, zonaIds: angie.zonas.filter((z) => z.activo && !/ \d{6}$/.test(z.nombre)).map((z) => z.id) };
     await http('PUT', `/mozos/${angie.id}/zonas`, A, { zonaIds: [...zonasOriginalesAngie.zonaIds, zonaId] });
     check('HU040 Esc.1 la zona queda disponible para los mozos que la atienden', (await zonasMozo()).some((z) => z.id === zonaId));
 
@@ -147,17 +148,17 @@ async function despacharItem(item, expedidor) {
     await clickTexto('GUARDAR CAMBIOS');
     check('UI HU041 Esc.2 el formulario muestra el número repetido', await esperar(page, () => document.querySelector('[role="alert"]')?.innerText.includes('Ya existe')));
     check('Sin errores de JavaScript', errors.length === 0, errors.join(' | '));
-
-    // Limpieza: las zonas de prueba quedan inactivas para no mostrarse a los mozos
-    const deLaPrueba = (await http('GET', '/zonas/todas', A)).data.filter((z) => z.nombre.endsWith(sufijo));
-    for (const z of deLaPrueba) await http('PATCH', `/zonas/${z.id}/estado`, A, { activo: false });
   } catch (e) {
     check('Ejecución sin excepciones', false, e.message);
   } finally {
+    // Limpieza, también si la prueba falló: angie recupera sus zonas y las zonas de prueba quedan
+    // inactivas para no mostrarse a los mozos ni en la vista de salón
+    const admin = await login('login-admin', { username: 'admin', password: 'admin123' });
     if (zonasOriginalesAngie) {
-      const admin = await login('login-admin', { username: 'admin', password: 'admin123' });
       await http('PUT', `/mozos/${zonasOriginalesAngie.id}/zonas`, admin, { zonaIds: zonasOriginalesAngie.zonaIds });
     }
+    const deLaPrueba = (await http('GET', '/zonas/todas', admin)).data.filter((z) => z.nombre.endsWith(sufijo) && z.activo);
+    for (const z of deLaPrueba) await http('PATCH', `/zonas/${z.id}/estado`, admin, { activo: false });
     await browser.close();
     for (const r of results) console.log(`${r.ok ? 'OK  ' : 'FAIL'} ${r.name}${r.detail ? ` (${r.detail})` : ''}`);
     process.exit(results.every((r) => r.ok) ? 0 : 1);

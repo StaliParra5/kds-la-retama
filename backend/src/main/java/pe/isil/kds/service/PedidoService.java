@@ -387,7 +387,7 @@ public class PedidoService {
             dto.setMesaId(pedido.getMesa().getId());
             dto.setMesaNumero(pedido.getMesa().getNumeroMesa());
         }
-        dto.setUsuarioNombre(pedido.getUsuario().getNombre() + " " + pedido.getUsuario().getApellido());
+        dto.setUsuarioNombre(pedido.getUsuario().getNombreCompleto());
         dto.setClienteNombre(pedido.getClienteNombre());
         dto.setClienteTelefono(pedido.getClienteTelefono());
         dto.setEstado(pedido.getEstado().name());

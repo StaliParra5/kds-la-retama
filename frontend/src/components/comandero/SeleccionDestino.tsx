@@ -309,7 +309,7 @@ export const SeleccionDestino: React.FC<Props> = ({ canales, onElegir }) => {
                   >
                     {m.enAtencion ? 'En atención' : 'Libre'}
                   </span>
-                  <span className="text-[10px] text-on-surface-variant">{m.capacidad} pers.</span>
+                  <span className="text-[10px] text-on-surface-variant">Cap. {m.capacidad}</span>
                 </button>
               ))}
             </div>

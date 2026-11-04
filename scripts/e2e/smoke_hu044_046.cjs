@@ -2,7 +2,7 @@
 const path = require('path');
 const FRONT = path.resolve(__dirname, '../../frontend');
 const puppeteer = require(path.join(FRONT, 'node_modules/puppeteer-core'));
-const { http, login, loginCompleto, crearMozo } = require('./lib.cjs');
+const { http, login, loginCompleto, crearMozo, cerrarMesa } = require('./lib.cjs');
 
 const BASE = 'http://localhost:5173';
 
@@ -43,6 +43,7 @@ async function despachar(item, expedidor) {
   const abiertas = []; // mesas abiertas por la prueba, para cerrarlas al final
   let A;
   let tokenMozo;
+  const mozosDePrueba = [];
 
   try {
     const admin = await loginCompleto('login-admin', { username: 'admin', password: 'admin123' });
@@ -55,11 +56,13 @@ async function despachar(item, expedidor) {
     const barra = zonas.find((z) => z.nombre === 'Barra' && z.activo);
 
     const mozo = await crearMozo(A, { username: `mesa${sufijo}`, nombre: 'Marco', apellido: 'Salas' });
+    mozosDePrueba.push(mozo.id);
     await http('PUT', `/mozos/${mozo.id}/zonas`, A, { zonaIds: [terraza.id] });
     const sesion = await loginCompleto('login-pin', { username: mozo.username, pin: mozo.pin });
     tokenMozo = sesion.token;
     const T = tokenMozo;
     const otro = await crearMozo(A, { username: `barra${sufijo}`, nombre: 'Bruno', apellido: 'Barra' });
+    mozosDePrueba.push(otro.id);
     await http('PUT', `/mozos/${otro.id}/zonas`, A, { zonaIds: [barra.id] });
     const tokenOtro = (await loginCompleto('login-pin', { username: otro.username, pin: otro.pin })).token;
 
@@ -147,14 +150,14 @@ async function despachar(item, expedidor) {
     abiertas.splice(abiertas.indexOf(mesaA.id), 1);
     check('Sin errores de JavaScript', errors.length === 0, errors.join(' | '));
 
-    await http('PATCH', `/mozos/${mozo.id}/estado`, A, { activo: false });
-    await http('DELETE', `/mozos/${otro.id}`, A);
   } catch (e) {
     check('Ejecución sin excepciones', false, e.message);
   } finally {
-    // Cierra las mesas que la prueba dejó abiertas (sin pedidos pendientes)
-    for (const mesaId of abiertas) {
-      if (tokenMozo) await http('POST', `/mesas/${mesaId}/atencion/liberar`, tokenMozo);
+    // Cierra las mesas abiertas por la prueba (despachando lo pendiente) antes de desactivar a los mozos,
+    // porque desactivarlos revoca su sesión y ya no podrían liberarlas
+    if (tokenMozo) for (const mesaId of abiertas) await cerrarMesa(mesaId, tokenMozo, A);
+    for (const id of mozosDePrueba) {
+      if ((await http('DELETE', `/mozos/${id}`, A)).status !== 204) await http('PATCH', `/mozos/${id}/estado`, A, { activo: false });
     }
     await browser.close();
     for (const r of results) console.log(`${r.ok ? 'OK  ' : 'FAIL'} ${r.name}${r.detail ? ` (${r.detail})` : ''}`);

@@ -127,7 +127,7 @@ public class MozoService {
     public void eliminar(Long id) {
         Usuario mozo = buscarMozo(id);
         if (tieneHistorial(id)) {
-            throw new OperacionNoPermitidaException("El mozo " + mozo.getNombre() + " " + mozo.getApellido()
+            throw new OperacionNoPermitidaException("El mozo " + mozo.getNombreCompleto()
                     + " tiene pedidos registrados: no se puede eliminar para conservar la trazabilidad. Puede desactivarlo.",
                     CODIGO_CON_HISTORIAL);
         }
@@ -136,7 +136,7 @@ public class MozoService {
             usuarioRepository.flush();
         } catch (DataIntegrityViolationException e) {
             // Un pedido registrado entre la comprobación y el borrado: mismo trato que el Escenario 8
-            throw new OperacionNoPermitidaException("El mozo " + mozo.getNombre() + " " + mozo.getApellido()
+            throw new OperacionNoPermitidaException("El mozo " + mozo.getNombreCompleto()
                     + " acaba de registrar pedidos: no se puede eliminar. Puede desactivarlo.", CODIGO_CON_HISTORIAL);
         }
     }

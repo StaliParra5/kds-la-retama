@@ -29,6 +29,10 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
 
     List<Pedido> findByAtencionIdOrderByCreatedAtAsc(Long atencionId);
 
+    // Vista de salón (HU048): pedidos de varias atenciones con sus ítems en una sola consulta
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"items", "atencion"})
+    List<Pedido> findByAtencionIdIn(java.util.Collection<Long> atencionIds);
+
     @Query("SELECT DISTINCT p.usuario.id FROM Pedido p WHERE p.usuario.id IN :ids")
     List<Long> idsUsuariosConPedidos(@Param("ids") List<Long> ids);
 

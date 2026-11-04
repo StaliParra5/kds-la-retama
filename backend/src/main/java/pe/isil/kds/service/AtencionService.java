@@ -120,8 +120,7 @@ public class AtencionService {
     private static int itemsPendientes(List<PedidoResponse> pedidos) {
         return (int) pedidos.stream()
                 .flatMap(p -> p.getItems() == null ? java.util.stream.Stream.empty() : p.getItems().stream())
-                .filter(i -> !EstadoItem.DESPACHADO.name().equals(i.getEstadoItem())
-                        && !EstadoItem.ANULADO.name().equals(i.getEstadoItem()))
+                .filter(i -> !EstadoItem.valueOf(i.getEstadoItem()).esFinal())
                 .count();
     }
 
@@ -138,11 +137,11 @@ public class AtencionService {
         dto.setZonaNombre(a.getMesa().getZona().getNombre());
         dto.setCapacidad(a.getMesa().getCapacidad());
         dto.setPersonas(a.getPersonas());
-        dto.setMozoNombre(a.getMozo().getNombre() + " " + a.getMozo().getApellido());
+        dto.setMozoNombre(a.getMozo().getNombreCompleto());
         dto.setAbiertaEn(a.getAbiertaEn());
         dto.setLiberadaEn(a.getLiberadaEn());
         if (a.getLiberadaPor() != null) {
-            dto.setLiberadaPorNombre(a.getLiberadaPor().getNombre() + " " + a.getLiberadaPor().getApellido());
+            dto.setLiberadaPorNombre(a.getLiberadaPor().getNombreCompleto());
         }
         dto.setPedidos(pedidos);
         dto.setItemsPendientes(itemsPendientes(pedidos));
