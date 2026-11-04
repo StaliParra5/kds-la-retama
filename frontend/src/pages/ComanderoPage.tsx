@@ -693,117 +693,120 @@ export const ComanderoPage: React.FC = () => {
           )}
 
           {/* Lista de Ítems del Ticket: contenedor flex con scroll interno autónomo */}
-          {/* fieldset deshabilita toda la edición mientras hay un envío sin confirmar (HU009) */}
-          <fieldset
-            disabled={envioSinConfirmar}
-            className="flex-1 min-h-0 p-3.5 overflow-y-auto flex flex-col gap-2.5 min-w-0 border-0 m-0 disabled:opacity-60"
-          >
-            {itemsComanda.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-on-surface-variant">
-                <span className="material-symbols-outlined text-[42px] text-outline/50 mb-2">
-                  shopping_cart
-                </span>
-                <p className="text-xs font-bold text-on-surface">Comanda vacía</p>
-                <p className="text-[11px] mt-1 max-w-[200px]">
-                  Seleccione platos de la carta a la izquierda para armar la orden.
-                </p>
-              </div>
-            ) : (
-              itemsComanda.map((item) => (
-                <div
-                  key={item.lineaId}
-                  className="bg-surface-container-low/70 border border-surface-container-high rounded-xl p-3 flex flex-col gap-2 shadow-2xs"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-left flex-1">
-                      <p className="text-xs font-bold text-on-surface leading-tight">
-                        {item.plato.nombre}
-                      </p>
-                      <span className="text-[10px] text-on-surface-variant font-medium">
-                        S/ {item.plato.precio.toFixed(2)} c/u • {item.plato.tiempoEstandarMinutos}{' '}
-                        min
-                      </span>
-                    </div>
-                    <span className="text-xs font-extrabold text-on-surface font-mono">
-                      S/ {(item.plato.precio * item.cantidad).toFixed(2)}
-                    </span>
-                  </div>
-
-                  {/* Campo de Modificadores por Ítem ("Sin cebolla", "Término medio") (HU008) */}
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={item.modificadores || ''}
-                      maxLength={MODIFICADORES_MAX_CARACTERES}
-                      onChange={(e) => handleModificadorChange(item.lineaId, e.target.value)}
-                      placeholder="Nota de cocina (ej. Sin ají, término 3/4)..."
-                      className="w-full bg-surface-container-lowest text-[11px] pl-2.5 pr-14 py-1.5 rounded-md border border-surface-container-high placeholder:text-outline/70 focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    {(item.modificadores?.length ?? 0) > 0 && (
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-mono text-outline">
-                        {item.modificadores?.length}/{MODIFICADORES_MAX_CARACTERES}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Modificadores rápidos táctiles: un toque agrega, otro toque retira */}
-                  <div className="flex flex-wrap gap-1">
-                    {MODIFICADORES_RAPIDOS.map((mod) => {
-                      const activo = tieneModificador(item.modificadores, mod);
-                      return (
-                        <button
-                          key={mod}
-                          type="button"
-                          onClick={() => handleToggleModificadorRapido(item.lineaId, mod)}
-                          aria-pressed={activo}
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
-                            activo
-                              ? 'bg-primary text-on-primary border-primary'
-                              : 'bg-surface-container-lowest text-on-surface-variant border-surface-container-high hover:border-primary/50'
-                          }`}
-                        >
-                          {mod}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Controles de Cantidad (+ / -) y Quitar */}
-                  <div className="flex items-center justify-between pt-1">
-                    <button
-                      type="button"
-                      onClick={() => handleQuitarLinea(item.lineaId)}
-                      className="text-on-surface-variant hover:text-error p-1"
-                      title="Quitar plato"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">delete</span>
-                    </button>
-
-                    <div className="flex items-center gap-2 bg-surface-container-lowest rounded-lg border border-surface-container-high px-2 py-0.5">
-                      <button
-                        type="button"
-                        onClick={() => handleDecrementarLinea(item.lineaId)}
-                        className="w-6 h-6 flex items-center justify-center text-on-surface hover:bg-surface-container rounded"
-                      >
-                        <span className="material-symbols-outlined text-[14px]">remove</span>
-                      </button>
-                      <span className="font-mono text-xs font-bold w-4 text-center">
-                        {item.cantidad}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleIncrementarLinea(item.lineaId)}
-                        disabled={item.cantidad >= CANTIDAD_MAXIMA}
-                        className="w-6 h-6 flex items-center justify-center text-on-surface hover:bg-surface-container rounded disabled:opacity-40"
-                      >
-                        <span className="material-symbols-outlined text-[14px]">add</span>
-                      </button>
-                    </div>
-                  </div>
+          {/* El scroll vive en un div: los navegadores no hacen scroll fiable sobre un fieldset flex */}
+          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+            {/* fieldset deshabilita toda la edición mientras hay un envío sin confirmar (HU009) */}
+            <fieldset
+              disabled={envioSinConfirmar}
+              className="flex-1 p-3.5 flex flex-col gap-2.5 min-w-0 border-0 m-0 disabled:opacity-60"
+            >
+              {itemsComanda.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[42px] text-outline/50 mb-2">
+                    shopping_cart
+                  </span>
+                  <p className="text-xs font-bold text-on-surface">Comanda vacía</p>
+                  <p className="text-[11px] mt-1 max-w-[200px]">
+                    Seleccione platos de la carta a la izquierda para armar la orden.
+                  </p>
                 </div>
-              ))
-            )}
-          </fieldset>
+              ) : (
+                itemsComanda.map((item) => (
+                  <div
+                    key={item.lineaId}
+                    className="bg-surface-container-low/70 border border-surface-container-high rounded-xl p-3 flex flex-col gap-2 shadow-2xs flex-shrink-0"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-left flex-1">
+                        <p className="text-xs font-bold text-on-surface leading-tight">
+                          {item.plato.nombre}
+                        </p>
+                        <span className="text-[10px] text-on-surface-variant font-medium">
+                          S/ {item.plato.precio.toFixed(2)} c/u • {item.plato.tiempoEstandarMinutos}{' '}
+                          min
+                        </span>
+                      </div>
+                      <span className="text-xs font-extrabold text-on-surface font-mono">
+                        S/ {(item.plato.precio * item.cantidad).toFixed(2)}
+                      </span>
+                    </div>
+
+                    {/* Campo de Modificadores por Ítem ("Sin cebolla", "Término medio") (HU008) */}
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={item.modificadores || ''}
+                        maxLength={MODIFICADORES_MAX_CARACTERES}
+                        onChange={(e) => handleModificadorChange(item.lineaId, e.target.value)}
+                        placeholder="Nota de cocina (ej. Sin ají, término 3/4)..."
+                        className="w-full bg-surface-container-lowest text-[11px] pl-2.5 pr-14 py-1.5 rounded-md border border-surface-container-high placeholder:text-outline/70 focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      {(item.modificadores?.length ?? 0) > 0 && (
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-mono text-outline">
+                          {item.modificadores?.length}/{MODIFICADORES_MAX_CARACTERES}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Modificadores rápidos táctiles: un toque agrega, otro toque retira */}
+                    <div className="flex flex-wrap gap-1">
+                      {MODIFICADORES_RAPIDOS.map((mod) => {
+                        const activo = tieneModificador(item.modificadores, mod);
+                        return (
+                          <button
+                            key={mod}
+                            type="button"
+                            onClick={() => handleToggleModificadorRapido(item.lineaId, mod)}
+                            aria-pressed={activo}
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
+                              activo
+                                ? 'bg-primary text-on-primary border-primary'
+                                : 'bg-surface-container-lowest text-on-surface-variant border-surface-container-high hover:border-primary/50'
+                            }`}
+                          >
+                            {mod}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Controles de Cantidad (+ / -) y Quitar */}
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleQuitarLinea(item.lineaId)}
+                        className="text-on-surface-variant hover:text-error p-1"
+                        title="Quitar plato"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                      </button>
+
+                      <div className="flex items-center gap-2 bg-surface-container-lowest rounded-lg border border-surface-container-high px-2 py-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleDecrementarLinea(item.lineaId)}
+                          className="w-6 h-6 flex items-center justify-center text-on-surface hover:bg-surface-container rounded"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">remove</span>
+                        </button>
+                        <span className="font-mono text-xs font-bold w-4 text-center">
+                          {item.cantidad}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleIncrementarLinea(item.lineaId)}
+                          disabled={item.cantidad >= CANTIDAD_MAXIMA}
+                          className="w-6 h-6 flex items-center justify-center text-on-surface hover:bg-surface-container rounded disabled:opacity-40"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">add</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </fieldset>
+          </div>
 
           {/* Pie de Comanda: Observaciones y Botón Enviar */}
           {/* flex-shrink-0 garantiza que el total y el botón de acción nunca sean colapsados por la lista de ítems */}
