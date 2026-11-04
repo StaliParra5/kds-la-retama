@@ -337,3 +337,8 @@
   - `POST /pedidos` de salón exige la atención abierta (409 `MESA_SIN_ATENCION`); una mesa o zona inactiva responde 409 `MESA_NO_DISPONIBLE` (antes 400), y con esos códigos o un 403 el comandero vuelve a la elección de mesa conservando los platos. "Mesa en atención" (HU040/HU041) pasa a ser "atención abierta" y `/zonas` y `/mesas` marcan cada mesa como libre o en atención.
   - Comandero: `SeleccionDestino` (canal → zona → mesa → personas) antes de la carta; encabezado con mesa, personas y mozo, "Cambiar mesa" (confirma si hay platos sin enviar), "Liberar mesa" y la lista de pedidos de la mesa con el estado de cada ítem.
   - Criterio de Aceptación: Escenarios 1 a 6 de HU044 y 1 a 5 de HU046; `AtencionServiceTest`, `PedidoServiceTest`, `MesaServiceTest`; smoke `smoke_hu044_046.cjs` 28/28.
+
+- [x] **TASK-064 [FULL] [F2] Datos del cliente para llevar (HU045, D20)**
+  - `POST /pedidos` con canal Para llevar exige nombre y celular peruano (9 dígitos, empieza en 9); el servidor guarda los datos sin espacios al borde, limita su largo (400 en vez de error de BD), no los guarda en Salón y los considera en la idempotencia. Delivery no cambia.
+  - `SeleccionDestino`: Para llevar pide nombre y celular antes de la carta; el comandero muestra al cliente en el encabezado y en el acuse junto al código, y tras enviar vuelve a pedir el siguiente cliente. Cocina y pase muestran el nombre en la tarjeta del pedido (`clienteNombre` en `ItemCocinaDto`).
+  - Criterio de Aceptación: Escenarios 1 a 5 de HU045; `PedidoServiceTest`; smoke `smoke_hu045.cjs` 15/15.

@@ -36,6 +36,8 @@ public final class ItemCocinaMapper {
         dto.setCanalNombre(pedido.getCanal().getNombre());
         dto.setCanalSlaMinutos(pedido.getCanal().getSlaObjetivoMinutos());
         dto.setMesaNumero(pedido.getMesa() != null ? pedido.getMesa().getNumeroMesa() : null);
+        // HU045 Escenario 3: el nombre del cliente para llevar acompaña al código del pedido
+        dto.setClienteNombre(pedido.getClienteNombre());
         dto.setFechaEnvioCocina(pedido.getFechaEnvioCocina());
 
         long enOtras = pedido.getItems().stream()

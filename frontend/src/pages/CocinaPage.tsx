@@ -342,6 +342,7 @@ export const CocinaPage: React.FC = () => {
                       <p className="text-xs font-semibold text-on-surface-variant mt-0.5">
                         {grupo.canalNombre}
                         {grupo.mesaNumero ? ` · Mesa ${grupo.mesaNumero}` : ''}
+                        {grupo.clienteNombre ? ` · ${grupo.clienteNombre}` : ''}
                       </p>
                     </div>
                     <span

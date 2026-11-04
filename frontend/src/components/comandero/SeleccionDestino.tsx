@@ -1,6 +1,6 @@
 // Paso previo al comandero (HU044): el mozo elige dónde va el pedido antes de ver la carta.
 // - Salón: zona → mesa (cada una indica si está libre o en atención) → personas si está libre.
-// - Para llevar y Delivery pasan directo al comandero.
+// - Para llevar pide nombre y celular del cliente antes de la carta (HU045); Delivery pasa directo.
 // - Sin zonas asignadas (HU043) el salón no está disponible.
 import { useMutation, useQuery } from '@tanstack/react-query';
 import axios from 'axios';
@@ -13,7 +13,12 @@ export interface Destino {
   canal: CanalVenta;
   // Solo en Salón: la atención abierta de la mesa elegida
   atencion: AtencionMesa | null;
+  // Solo Para llevar (HU045): a quién avisar cuando el pedido esté listo
+  cliente?: { nombre: string; celular: string } | null;
 }
+
+// D20: celular peruano de 9 dígitos que empieza en 9
+const CELULAR_VALIDO = /^9\d{8}$/;
 
 interface Props {
   canales: CanalVenta[];
@@ -28,7 +33,11 @@ const ICONO_CANAL: Record<string, string> = {
 
 export const SeleccionDestino: React.FC<Props> = ({ canales, onElegir }) => {
   const { showToast } = useToast();
-  const [paso, setPaso] = useState<'canal' | 'mesa'>('canal');
+  const [paso, setPaso] = useState<'canal' | 'mesa' | 'cliente'>('canal');
+  const [canalCliente, setCanalCliente] = useState<CanalVenta | null>(null);
+  const [clienteNombre, setClienteNombre] = useState('');
+  const [clienteCelular, setClienteCelular] = useState('');
+  const [errorCliente, setErrorCliente] = useState<string | null>(null);
   const [zonaId, setZonaId] = useState<number | null>(null);
   const [mesaLibre, setMesaLibre] = useState<Mesa | null>(null);
   const [personas, setPersonas] = useState('');
@@ -83,7 +92,30 @@ export const SeleccionDestino: React.FC<Props> = ({ canales, onElegir }) => {
       refetchZonas();
       return;
     }
+    if (canal.codigo === 'PARA_LLEVAR') {
+      // HU045 Escenario 1: sin nombre y celular no se muestra el comandero
+      setCanalCliente(canal);
+      setErrorCliente(null);
+      setPaso('cliente');
+      return;
+    }
     onElegir({ canal, atencion: null });
+  };
+
+  const confirmarCliente = (e: React.FormEvent) => {
+    e.preventDefault();
+    const nombre = clienteNombre.trim();
+    const celular = clienteCelular.trim();
+    if (!nombre) {
+      setErrorCliente('Ingrese el nombre del cliente.');
+      return;
+    }
+    if (!CELULAR_VALIDO.test(celular)) {
+      setErrorCliente('El celular no es válido: debe tener 9 dígitos y empezar con 9.');
+      return;
+    }
+    if (canalCliente)
+      onElegir({ canal: canalCliente, atencion: null, cliente: { nombre, celular } });
   };
 
   const elegirMesa = (mesa: Mesa) => {
@@ -149,6 +181,69 @@ export const SeleccionDestino: React.FC<Props> = ({ canales, onElegir }) => {
             })}
           </div>
         </>
+      ) : paso === 'cliente' ? (
+        <form
+          onSubmit={confirmarCliente}
+          className="w-full max-w-md mx-auto flex flex-col gap-4 bg-surface-container-lowest border border-surface-container-high rounded-2xl p-6 shadow-sm"
+        >
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setPaso('canal')}
+              className="p-2 rounded-lg hover:bg-surface-container-low text-on-surface-variant"
+              aria-label="Volver a elegir el tipo de pedido"
+            >
+              <span className="material-symbols-outlined">arrow_back</span>
+            </button>
+            <div>
+              <h1 className="font-headline font-bold text-xl">{canalCliente?.nombre}</h1>
+              <p className="text-xs text-on-surface-variant">
+                ¿A quién avisamos cuando el pedido esté listo?
+              </p>
+            </div>
+          </div>
+          {errorCliente && (
+            <p
+              role="alert"
+              className="p-3 bg-error-container text-on-error-container text-xs rounded-lg border border-error/20 font-medium"
+            >
+              {errorCliente}
+            </p>
+          )}
+          <div>
+            <label htmlFor="cliente-nombre" className="block text-xs font-bold uppercase mb-1">
+              Nombre del cliente *
+            </label>
+            <input
+              id="cliente-nombre"
+              maxLength={120}
+              value={clienteNombre}
+              onChange={(e) => setClienteNombre(e.target.value)}
+              placeholder="Ej. Ana Ruiz"
+              className="w-full bg-surface-container-low text-sm px-3 py-2.5 rounded-lg border border-surface-container-high focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label htmlFor="cliente-celular" className="block text-xs font-bold uppercase mb-1">
+              Celular *
+            </label>
+            <input
+              id="cliente-celular"
+              inputMode="numeric"
+              maxLength={9}
+              value={clienteCelular}
+              onChange={(e) => setClienteCelular(e.target.value.replace(/\D/g, ''))}
+              placeholder="9XXXXXXXX"
+              className="w-full bg-surface-container-low text-sm font-mono px-3 py-2.5 rounded-lg border border-surface-container-high focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full py-3 rounded-xl bg-primary text-on-primary text-xs font-bold uppercase tracking-wider"
+          >
+            Continuar a la carta
+          </button>
+        </form>
       ) : (
         <>
           <div className="flex items-center gap-3">

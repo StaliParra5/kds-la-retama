@@ -253,6 +253,79 @@ class PedidoServiceTest {
         verify(pedidoRepository, never()).saveAndFlush(any());
     }
 
+    private CrearPedidoRequest paraLlevar(String nombre, String celular) {
+        CanalVenta canalLlevar = new CanalVenta();
+        canalLlevar.setId(4L);
+        canalLlevar.setCodigo("PARA_LLEVAR");
+        canalLlevar.setNombre("Para Llevar");
+        canalLlevar.setActivo(true);
+        when(canalRepository.findById(4L)).thenReturn(Optional.of(canalLlevar));
+        when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(4L);
+        req.setClienteNombre(nombre);
+        req.setClienteTelefono(celular);
+        req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
+        return req;
+    }
+
+    @Test
+    @DisplayName("HU045 Escenario 4: Para llevar sin nombre del cliente se rechaza indicando el dato faltante")
+    void paraLlevar_SinNombre() {
+        CrearPedidoRequest req = paraLlevar("  ", "987654321");
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> pedidoService.crearComanda(req, "angie"));
+        assertTrue(ex.getMessage().contains("nombre"));
+        verify(pedidoRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("HU045 Escenarios 2 y 4: Para llevar con celular inválido (no 9 dígitos o no empieza en 9) se rechaza")
+    void paraLlevar_CelularInvalido() {
+        for (String celular : new String[] {null, "98765432", "887654321", "9876543210", "98765432a"}) {
+            CrearPedidoRequest req = paraLlevar("Ana", celular);
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> pedidoService.crearComanda(req, "angie"), celular);
+            assertTrue(ex.getMessage().contains("celular"), celular);
+        }
+        verify(pedidoRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("HU045 Escenarios 3 y 5: Con datos válidos el pedido guarda nombre y celular (sin exigir zonas)")
+    void paraLlevar_DatosValidos() {
+        mozo.getZonas().clear();
+        CrearPedidoRequest req = paraLlevar(" Ana Ruiz ", " 987654321 ");
+        when(platoRepository.findById(50L)).thenReturn(Optional.of(plato));
+        when(pedidoRepository.obtenerSiguienteValorSecuencia()).thenReturn(7L);
+        when(pedidoRepository.saveAndFlush(any(Pedido.class))).thenAnswer(i -> {
+            Pedido p = i.getArgument(0);
+            p.setId(101L);
+            return p;
+        });
+
+        PedidoResponse r = pedidoService.crearComanda(req, "angie");
+
+        assertEquals("Ana Ruiz", r.getClienteNombre());
+        assertEquals("987654321", r.getClienteTelefono());
+        assertNull(r.getMesaNumero());
+    }
+
+    @Test
+    @DisplayName("HU045 / D20: Delivery no exige los datos del cliente por ahora")
+    void delivery_SinDatosCliente() {
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(2L);
+        req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
+        canalDelivery.setActivo(true);
+        when(canalRepository.findById(2L)).thenReturn(Optional.of(canalDelivery));
+        when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
+        when(platoRepository.findById(50L)).thenReturn(Optional.of(plato));
+        when(pedidoRepository.obtenerSiguienteValorSecuencia()).thenReturn(8L);
+        when(pedidoRepository.saveAndFlush(any(Pedido.class))).thenAnswer(i -> i.getArgument(0));
+
+        assertNotNull(pedidoService.crearComanda(req, "angie"));
+    }
+
     @Test
     @DisplayName("HU006: Fallback de correlativo al conteo del día si la secuencia nativa no está disponible")
     void crearComanda_FallbackSecuencia_Exitoso() {

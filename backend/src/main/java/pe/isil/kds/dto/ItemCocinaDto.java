@@ -28,6 +28,8 @@ public class ItemCocinaDto {
     private String canalNombre;
     private Integer canalSlaMinutos;
     private String mesaNumero;
+    // HU045: cliente de un pedido para llevar (nulo en salón)
+    private String clienteNombre;
     private LocalDateTime fechaEnvioCocina;
     // Ítems vigentes del mismo pedido asignados a otras estaciones (solo lectura)
     private Integer itemsEnOtrasEstaciones;
@@ -89,6 +91,9 @@ public class ItemCocinaDto {
 
     public String getMesaNumero() { return mesaNumero; }
     public void setMesaNumero(String mesaNumero) { this.mesaNumero = mesaNumero; }
+
+    public String getClienteNombre() { return clienteNombre; }
+    public void setClienteNombre(String clienteNombre) { this.clienteNombre = clienteNombre; }
 
     public LocalDateTime getFechaEnvioCocina() { return fechaEnvioCocina; }
     public void setFechaEnvioCocina(LocalDateTime fechaEnvioCocina) { this.fechaEnvioCocina = fechaEnvioCocina; }

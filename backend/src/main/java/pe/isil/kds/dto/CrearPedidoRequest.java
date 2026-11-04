@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,7 +19,9 @@ public class CrearPedidoRequest {
     @Pattern(regexp = "^[A-Za-z0-9-]{8,64}$", message = "La clave de envío no tiene un formato válido")
     private String claveIdempotencia;
 
+    @Size(max = 120, message = "El nombre del cliente admite hasta 120 caracteres")
     private String clienteNombre;
+    @Size(max = 30, message = "El teléfono del cliente admite hasta 30 caracteres")
     private String clienteTelefono;
     private String clienteDireccion;
     private String observaciones;

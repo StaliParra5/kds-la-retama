@@ -70,6 +70,9 @@ public class PedidoService {
     }
 
     public static final String CODIGO_MESA_SIN_ATENCION = "MESA_SIN_ATENCION";
+    private static final String CANAL_SALON = "SALON";
+    private static final String CANAL_PARA_LLEVAR = "PARA_LLEVAR";
+    private static final String CELULAR_PERU = "9[0-9]{8}";
     // La mesa se desactivó o su zona quedó inactiva: el comandero vuelve a la elección de mesa
     public static final String CODIGO_MESA_NO_DISPONIBLE = "MESA_NO_DISPONIBLE";
 
@@ -122,16 +125,21 @@ public class PedidoService {
 
     private boolean mismoContenido(Pedido existente, CrearPedidoRequest request) {
         Long mesaExistente = existente.getMesa() != null ? existente.getMesa().getId() : null;
-        boolean mesaIgual = !"SALON".equalsIgnoreCase(existente.getCanal().getCodigo())
+        boolean mesaIgual = !CANAL_SALON.equalsIgnoreCase(existente.getCanal().getCodigo())
                 || java.util.Objects.equals(mesaExistente, request.getMesaId());
         if (!existente.getCanal().getId().equals(request.getCanalId()) || !mesaIgual) {
+            return false;
+        }
+        boolean esSalon = CANAL_SALON.equalsIgnoreCase(existente.getCanal().getCodigo());
+        if (!esSalon && (!java.util.Objects.equals(existente.getClienteNombre(), limpio(request.getClienteNombre()))
+                || !java.util.Objects.equals(existente.getClienteTelefono(), limpio(request.getClienteTelefono())))) {
             return false;
         }
         List<String> guardados = existente.getItems().stream()
                 .map(i -> i.getPlato().getId() + "|" + i.getCantidad() + "|" + java.util.Objects.toString(i.getModificadores(), ""))
                 .sorted().toList();
         List<String> recibidos = request.getItems() == null ? List.of() : request.getItems().stream()
-                .map(i -> i.getPlatoId() + "|" + i.getCantidad() + "|" + java.util.Objects.toString(normalizarModificadores(i.getModificadores()), ""))
+                .map(i -> i.getPlatoId() + "|" + i.getCantidad() + "|" + java.util.Objects.toString(limpio(i.getModificadores()), ""))
                 .sorted().toList();
         return guardados.equals(recibidos);
     }
@@ -147,7 +155,7 @@ public class PedidoService {
 
         // HU006 Escenario 2: Validación de mesa obligatoria en consumo de Salón
         Mesa mesa = null;
-        if ("SALON".equalsIgnoreCase(canal.getCodigo())) {
+        if (CANAL_SALON.equalsIgnoreCase(canal.getCodigo())) {
             if (request.getMesaId() == null) {
                 throw new IllegalArgumentException("Para pedidos de Salón es obligatorio seleccionar una mesa.");
             }
@@ -167,7 +175,7 @@ public class PedidoService {
 
         // HU043 Escenario 3: el mozo solo registra pedidos de salón en mesas de sus zonas asignadas
         AtencionMesa atencion = null;
-        if ("SALON".equalsIgnoreCase(canal.getCodigo())) {
+        if (CANAL_SALON.equalsIgnoreCase(canal.getCodigo())) {
             Long zonaMesa = mesa.getZona().getId();
             boolean asignada = mozo.getZonas().stream().anyMatch(z -> z.getId().equals(zonaMesa));
             if (!asignada) {
@@ -187,6 +195,19 @@ public class PedidoService {
             throw new IllegalArgumentException("La comanda debe contener al menos un plato para ser abierta.");
         }
 
+        // HU045 Escenario 4 (D20): para llevar exige nombre y celular peruano (9 dígitos, empieza en 9)
+        boolean esSalon = CANAL_SALON.equalsIgnoreCase(canal.getCodigo());
+        String clienteNombre = esSalon ? null : limpio(request.getClienteNombre());
+        String clienteTelefono = esSalon ? null : limpio(request.getClienteTelefono());
+        if (CANAL_PARA_LLEVAR.equalsIgnoreCase(canal.getCodigo())) {
+            if (clienteNombre == null) {
+                throw new IllegalArgumentException("Para llevar: falta el nombre del cliente.");
+            }
+            if (clienteTelefono == null || !clienteTelefono.matches(CELULAR_PERU)) {
+                throw new IllegalArgumentException("Para llevar: el celular del cliente no es válido (9 dígitos y empieza con 9).");
+            }
+        }
+
         Pedido pedido = new Pedido();
         pedido.setCodigoCorrelativo(generarCodigoCorrelativo());
         pedido.setClaveIdempotencia(request.getClaveIdempotencia());
@@ -194,9 +215,9 @@ public class PedidoService {
         pedido.setMesa(mesa);
         pedido.setAtencion(atencion);
         pedido.setUsuario(mozo);
-        pedido.setClienteNombre(request.getClienteNombre());
-        pedido.setClienteTelefono(request.getClienteTelefono());
-        pedido.setClienteDireccion(request.getClienteDireccion());
+        pedido.setClienteNombre(clienteNombre);
+        pedido.setClienteTelefono(clienteTelefono);
+        pedido.setClienteDireccion(esSalon ? null : request.getClienteDireccion());
         pedido.setObservaciones(request.getObservaciones());
         pedido.setEstado(EstadoPedido.ENVIADO);
         pedido.setFechaEnvioCocina(LocalDateTime.now());
@@ -227,7 +248,7 @@ public class PedidoService {
             detalle.setPrecioUnitario(plato.getPrecio());
             BigDecimal subtotal = plato.getPrecio().multiply(BigDecimal.valueOf(itemReq.getCantidad()));
             detalle.setSubtotal(subtotal);
-            detalle.setModificadores(normalizarModificadores(itemReq.getModificadores()));
+            detalle.setModificadores(limpio(itemReq.getModificadores()));
             detalle.setTiempoEstandarMinutos(plato.getTiempoEstandarMinutos());
             // HU013 Escenario 3: todo ítem de un pedido recién registrado queda en RECIBIDO
             detalle.setEstadoItem(EstadoItem.RECIBIDO);
@@ -341,11 +362,9 @@ public class PedidoService {
         return candidato;
     }
 
-    private String normalizarModificadores(String modificadores) {
-        if (modificadores == null || modificadores.isBlank()) {
-            return null;
-        }
-        return modificadores.trim();
+    // Texto opcional: vacío o en blanco se guarda como nulo; si no, sin espacios al borde
+    private static String limpio(String texto) {
+        return texto == null || texto.isBlank() ? null : texto.trim();
     }
 
     // Pedidos de una atención de mesa en orden de envío (HU044 Escenario 4)

@@ -7,6 +7,7 @@ export interface GrupoPedido {
   canalNombre: string;
   canalSlaMinutos: number;
   mesaNumero?: string | null;
+  clienteNombre?: string | null;
   fechaEnvioCocina: string;
   itemsEnOtrasEstaciones: number;
   itemsPendientesPedido: number;
@@ -25,6 +26,7 @@ export const agruparPorPedido = (items: ItemCocina[]): GrupoPedido[] => {
         canalNombre: item.canalNombre,
         canalSlaMinutos: item.canalSlaMinutos,
         mesaNumero: item.mesaNumero,
+        clienteNombre: item.clienteNombre,
         fechaEnvioCocina: item.fechaEnvioCocina,
         itemsEnOtrasEstaciones: item.itemsEnOtrasEstaciones,
         itemsPendientesPedido: item.itemsPendientesPedido,

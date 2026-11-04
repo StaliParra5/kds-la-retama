@@ -345,6 +345,9 @@ export const ComanderoPage: React.FC = () => {
         canalId: canalActual.id,
         // La mesa solo aplica a consumo en Salón; Para llevar y Delivery no la arrastran
         mesaId: esSalon ? (atencion?.mesaId ?? null) : null,
+        // HU045: datos del cliente para llevar
+        clienteNombre: destino.cliente?.nombre,
+        clienteTelefono: destino.cliente?.celular,
         observaciones: observacionesGenerales.trim() || undefined,
         items: itemsComanda.map((item) => ({
           platoId: item.plato.id,
@@ -366,6 +369,8 @@ export const ComanderoPage: React.FC = () => {
       refrescarCorrelativo();
       // HU044 Escenario 4: la comanda nueva aparece entre los pedidos de la mesa
       if (atencion) recargarAtencion(atencion);
+      // HU045: cada pedido para llevar es de un cliente distinto; se vuelve a pedir nombre y celular
+      if (destino.cliente) setDestino(null);
     } catch (err: any) {
       const status: number | undefined = err.response?.status;
       if (!status || status >= 500) {
@@ -407,6 +412,25 @@ export const ComanderoPage: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
         <TopAppBar />
+        {/* HU009/HU045: el acuse del último envío sigue visible al volver a elegir destino */}
+        {acuse && (
+          <output
+            aria-live="polite"
+            className="max-w-5xl w-full mx-auto mt-4 px-4 lg:px-6 flex items-center gap-2 text-left"
+          >
+            <span className="flex-1 flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2.5">
+              <span className="material-symbols-outlined text-[20px] text-primary">task_alt</span>
+              <span className="text-xs font-extrabold">
+                Recibido por cocina · {acuse.codigoCorrelativo}
+                {acuse.clienteNombre ? ` · ${acuse.clienteNombre}` : ''}
+                <span className="font-semibold text-on-surface-variant">
+                  {' '}
+                  · {acuse.canalNombre} · {horaLocal(acuse.fechaEnvioCocina)}
+                </span>
+              </span>
+            </span>
+          </output>
+        )}
         <SeleccionDestino
           canales={canales}
           onElegir={(d) => {
@@ -438,7 +462,9 @@ export const ComanderoPage: React.FC = () => {
               <p className="font-headline font-extrabold text-base leading-tight">
                 {atencion
                   ? `Mesa ${atencion.mesaNumero} · ${atencion.zonaNombre}`
-                  : 'Pedido sin mesa'}
+                  : destino.cliente
+                    ? `Cliente: ${destino.cliente.nombre} · ${destino.cliente.celular}`
+                    : 'Pedido sin mesa'}
               </p>
               {atencion && (
                 <p className="text-[11px] font-semibold text-on-surface-variant">
@@ -690,6 +716,7 @@ export const ComanderoPage: React.FC = () => {
               <span className="flex-1">
                 <span className="block text-xs font-extrabold text-on-surface">
                   Recibido por cocina · {acuse.codigoCorrelativo}
+                  {acuse.clienteNombre ? ` · ${acuse.clienteNombre}` : ''}
                 </span>
                 <span className="block text-[11px] text-on-surface-variant">
                   {acuse.canalNombre}

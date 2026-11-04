@@ -160,6 +160,7 @@ export type EstadoItem =
   | 'ANULADO';
 
 export interface ItemCocina {
+  clienteNombre?: string | null;
   id: number;
   version: number;
   estado: EstadoItem;
