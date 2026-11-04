@@ -14,6 +14,7 @@ import { AdminProductosPage } from './pages/AdminProductosPage';
 import { CocinaPage } from './pages/CocinaPage';
 import { ComanderoPage } from './pages/ComanderoPage';
 import { LoginPage } from './pages/LoginPage';
+import { PasePage } from './pages/PasePage';
 import type { RolCodigo } from './types';
 import { rutaInicio } from './utils/rutas';
 
@@ -91,6 +92,16 @@ export default function App() {
                 element={
                   <ProtectedRoute roles={['COCINERO']}>
                     <CocinaPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* D9: Pase, despacho de los ítems listos */}
+              <Route
+                path="/pase"
+                element={
+                  <ProtectedRoute roles={['EXPEDIDOR']}>
+                    <PasePage />
                   </ProtectedRoute>
                 }
               />

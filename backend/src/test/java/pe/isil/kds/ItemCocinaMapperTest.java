@@ -100,4 +100,22 @@ class ItemCocinaMapperTest {
         d.setTiempoEstandarMinutos(10);
         return d;
     }
+
+    @Test
+    @DisplayName("D9: El ítem informa cuántos ítems del pedido siguen en cocina en cualquier estación")
+    void itemsPendientesPedido_CuentaLosQueSiguenEnCocina() {
+        DetallePedido lomo = item(1L, "Lomo Saltado", plancha);
+        lomo.setEstadoItem(EstadoItem.LISTO);
+        DetallePedido causa = item(2L, "Causa Limeña", frios);
+        DetallePedido ceviche = item(3L, "Ceviche", frios);
+        ceviche.setEstadoItem(EstadoItem.EN_PREPARACION);
+        DetallePedido despachado = item(4L, "Chicha", frios);
+        despachado.setEstadoItem(EstadoItem.DESPACHADO);
+        pedido.addItem(lomo);
+        pedido.addItem(causa);
+        pedido.addItem(ceviche);
+        pedido.addItem(despachado);
+
+        assertEquals(2, ItemCocinaMapper.aDto(lomo).getItemsPendientesPedido());
+    }
 }

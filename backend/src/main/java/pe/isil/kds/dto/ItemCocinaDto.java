@@ -31,6 +31,8 @@ public class ItemCocinaDto {
     private LocalDateTime fechaEnvioCocina;
     // Ítems vigentes del mismo pedido asignados a otras estaciones (solo lectura)
     private Integer itemsEnOtrasEstaciones;
+    // Ítems del pedido que siguen en cocina en cualquier estación (el pase decide si espera, D9)
+    private Integer itemsPendientesPedido;
 
     public ItemCocinaDto() {}
 
@@ -93,4 +95,7 @@ public class ItemCocinaDto {
 
     public Integer getItemsEnOtrasEstaciones() { return itemsEnOtrasEstaciones; }
     public void setItemsEnOtrasEstaciones(Integer itemsEnOtrasEstaciones) { this.itemsEnOtrasEstaciones = itemsEnOtrasEstaciones; }
+
+    public Integer getItemsPendientesPedido() { return itemsPendientesPedido; }
+    public void setItemsPendientesPedido(Integer itemsPendientesPedido) { this.itemsPendientesPedido = itemsPendientesPedido; }
 }

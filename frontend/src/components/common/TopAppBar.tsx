@@ -96,6 +96,23 @@ export const TopAppBar: React.FC = () => {
           </NavLink>
         )}
 
+        {/* Pase: despacho de ítems listos (D9) */}
+        {(isAdmin || user?.rol === 'EXPEDIDOR') && (
+          <NavLink
+            to="/pase"
+            className={({ isActive }) =>
+              `flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                isActive
+                  ? 'bg-primary text-on-primary shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+              }`
+            }
+          >
+            <span className="material-symbols-outlined text-[18px]">room_service</span>
+            <span>Pase</span>
+          </NavLink>
+        )}
+
         {/* Módulos Administrativos (HU003, HU004, HU005, HU023, HU037) */}
         {isAdmin && (
           <>

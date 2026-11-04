@@ -11,56 +11,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
-import { useTiempoReal } from '../api/tiempoReal';
+import { useRecargaAgrupada, useTiempoReal } from '../api/tiempoReal';
 import { TopAppBar } from '../components/common/TopAppBar';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import type { Estacion, EstadoItem, ItemCocina } from '../types';
-
-interface GrupoPedido {
-  pedidoId: number;
-  codigoPedido: string;
-  canalNombre: string;
-  canalSlaMinutos: number;
-  mesaNumero?: string | null;
-  fechaEnvioCocina: string;
-  itemsEnOtrasEstaciones: number;
-  items: ItemCocina[];
-}
-
-// Etiqueta y colores de cada estado: la fila entera cambia de color para que el cambio se note al tocar
-const ESTILO_ESTADO: Record<EstadoItem, { etiqueta: string; clase: string; fila: string }> = {
-  RECIBIDO: {
-    etiqueta: 'Pendiente',
-    clase: 'bg-surface-container-high text-on-surface',
-    fila: 'border-surface-container-high bg-surface-container-low/60',
-  },
-  EN_ESPERA: {
-    etiqueta: 'En espera',
-    clase: 'bg-tertiary/15 text-tertiary',
-    fila: 'border-tertiary/40 bg-tertiary/5',
-  },
-  EN_PREPARACION: {
-    etiqueta: 'En preparación',
-    clase: 'bg-primary text-on-primary',
-    fila: 'border-primary bg-primary/10',
-  },
-  LISTO: {
-    etiqueta: 'Listo',
-    clase: 'bg-secondary text-on-secondary',
-    fila: 'border-secondary bg-secondary/10',
-  },
-  DESPACHADO: {
-    etiqueta: 'Despachado',
-    clase: 'bg-surface-container text-on-surface-variant',
-    fila: 'border-surface-container-high bg-surface-container',
-  },
-  ANULADO: {
-    etiqueta: 'Anulado',
-    clase: 'bg-error/15 text-error',
-    fila: 'border-error/40 bg-error/5 line-through',
-  },
-};
+import { agruparPorPedido, claseSemaforo, ESTILO_ESTADO, minutosDesde } from '../utils/cocina';
 
 // Siguiente estado al tocar un ítem (HU014); los demás estados no cambian con un toque
 const SIGUIENTE_ESTADO: Partial<Record<EstadoItem, EstadoItem>> = {
@@ -81,39 +37,6 @@ const horaCorta = (fechaIso: string): string =>
 
 const esperaVigente = (item: ItemCocina, ahora: number): boolean =>
   item.estado === 'EN_ESPERA' && !!item.horaDisparo && new Date(item.horaDisparo).getTime() > ahora;
-
-// Agrupa conservando el orden de llegada que entrega el servidor (FIFO por envío a cocina)
-const agruparPorPedido = (items: ItemCocina[]): GrupoPedido[] => {
-  const grupos = new Map<number, GrupoPedido>();
-  for (const item of items) {
-    let grupo = grupos.get(item.pedidoId);
-    if (!grupo) {
-      grupo = {
-        pedidoId: item.pedidoId,
-        codigoPedido: item.codigoPedido,
-        canalNombre: item.canalNombre,
-        canalSlaMinutos: item.canalSlaMinutos,
-        mesaNumero: item.mesaNumero,
-        fechaEnvioCocina: item.fechaEnvioCocina,
-        itemsEnOtrasEstaciones: item.itemsEnOtrasEstaciones,
-        items: [],
-      };
-      grupos.set(item.pedidoId, grupo);
-    }
-    grupo.items.push(item);
-  }
-  return [...grupos.values()];
-};
-
-const minutosDesde = (fechaIso: string, ahora: number): number =>
-  Math.max(0, Math.floor((ahora - new Date(fechaIso).getTime()) / 60000));
-
-// Semáforo contra el SLA del canal: verde, ámbar desde el 75 % y rojo al superarlo
-const claseSemaforo = (minutos: number, sla: number): string => {
-  if (sla > 0 && minutos >= sla) return 'border-error bg-error/10 text-error';
-  if (sla > 0 && minutos >= sla * 0.75) return 'border-tertiary bg-tertiary/10 text-tertiary';
-  return 'border-secondary/40 bg-secondary/10 text-secondary';
-};
 
 export const CocinaPage: React.FC = () => {
   const { user, estacionId: estacionTerminal } = useAuth();
@@ -153,22 +76,8 @@ export const CocinaPage: React.FC = () => {
     enabled: estacionId != null,
   });
 
-  // Cualquier novedad de la estación recarga la cola: el servidor es la única fuente de verdad.
-  // Un pedido con varios ítems llega como una ráfaga de mensajes: se agrupan en una sola recarga.
-  const recargaPendiente = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const recargarCola = () => {
-    if (recargaPendiente.current) clearTimeout(recargaPendiente.current);
-    recargaPendiente.current = setTimeout(
-      () => queryClient.invalidateQueries({ queryKey: ['cola', estacionId] }),
-      150,
-    );
-  };
-  useEffect(
-    () => () => {
-      if (recargaPendiente.current) clearTimeout(recargaPendiente.current);
-    },
-    [],
-  );
+  // Cualquier novedad de la estación recarga la cola: el servidor es la única fuente de verdad
+  const recargarCola = useRecargaAgrupada(['cola', estacionId]);
   const { conectado, rechazo } = useTiempoReal({
     destinos: estacionId != null ? [`/topic/estacion/${estacionId}`] : [],
     alMensaje: recargarCola,
@@ -229,6 +138,8 @@ export const CocinaPage: React.FC = () => {
         }, MS_LISTO_VISIBLE);
         temporizadores.current.add(t);
       }
+      // Una recarga en vuelo leída antes del cambio no debe pisar el estado confirmado
+      await queryClient.cancelQueries({ queryKey: ['cola', estacionId] });
       queryClient.setQueryData<ItemCocina[]>(['cola', estacionId], (prev) =>
         prev?.map((i) => (i.id === data.id ? data : i)),
       );

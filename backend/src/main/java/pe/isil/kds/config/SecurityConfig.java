@@ -76,7 +76,7 @@ public class SecurityConfig {
                 .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/api/v1/docs/**").permitAll()
                 // Recursos estáticos y rutas SPA del frontend React servidos por Spring Boot
                 .requestMatchers("/", "/index.html", "/assets/**", "/vite.svg", "/*.ico", "/*.png", "/*.css", "/*.js").permitAll()
-                .requestMatchers("/login", "/comandero", "/admin", "/admin/**", "/cocina", "/cocina/**").permitAll()
+                .requestMatchers("/login", "/comandero", "/admin", "/admin/**", "/cocina", "/cocina/**", "/pase", "/pase/**").permitAll()
                 // Cualquier endpoint de API o recurso privado exige autenticación con JWT
                 .anyRequest().authenticated()
             )

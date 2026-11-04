@@ -46,4 +46,11 @@ public class CocinaService {
         return detalleRepository.findByEstacionIdAndEstadoItemInOrderByPedidoFechaEnvioCocinaAscIdAsc(estacionId, ESTADOS_EN_COLA)
                 .stream().map(ItemCocinaMapper::aDto).toList();
     }
+
+    /** Pase (D9): ítems Listos de todas las estaciones, esperando que el expedidor los despache. */
+    @Transactional(readOnly = true)
+    public List<ItemCocinaDto> listosParaPase() {
+        return detalleRepository.findByEstadoItemOrderByPedidoFechaEnvioCocinaAscIdAsc(EstadoItem.LISTO)
+                .stream().map(ItemCocinaMapper::aDto).toList();
+    }
 }

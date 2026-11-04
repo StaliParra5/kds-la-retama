@@ -5,7 +5,8 @@
 // - Si el servidor rechaza la sesión deja de reintentar: CONNECT rechazado equivale a un 401
 //   (vuelve al login); una suscripción rechazada se informa a la pantalla.
 import { Client } from '@stomp/stompjs';
-import { useEffect, useRef, useState } from 'react';
+import { type QueryKey, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { cerrarSesionExpirada } from './client';
 
 const urlWebSocket = () =>
@@ -104,4 +105,28 @@ export const useTiempoReal = ({
   }, [claveDestinos]);
 
   return { conectado, rechazo };
+};
+
+// Recarga una consulta ante avisos en tiempo real, agrupando ráfagas (un pedido de varios ítems
+// llega como varios mensajes seguidos) en una sola petición
+export const useRecargaAgrupada = (queryKey: QueryKey, esperaMs = 150) => {
+  const queryClient = useQueryClient();
+  const pendiente = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clave = JSON.stringify(queryKey);
+
+  useEffect(
+    () => () => {
+      if (pendiente.current) clearTimeout(pendiente.current);
+    },
+    [],
+  );
+
+  // La clave serializada representa a queryKey: un arreglo nuevo con el mismo contenido no recrea la función
+  return useCallback(() => {
+    if (pendiente.current) clearTimeout(pendiente.current);
+    pendiente.current = setTimeout(
+      () => queryClient.invalidateQueries({ queryKey: JSON.parse(clave) }),
+      esperaMs,
+    );
+  }, [clave, esperaMs, queryClient]);
 };

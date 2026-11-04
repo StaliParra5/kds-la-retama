@@ -294,3 +294,10 @@
   - Ítem En espera con hora de disparo futura: diálogo "¿Iniciar antes de tiempo?" (Esc. 3). El servidor exige `inicioAnticipado: true` y responde 409 con `codigo: INICIO_ANTICIPADO_REQUERIDO`, que la pantalla convierte en el mismo diálogo aunque el reloj de la tablet difiera; el historial registra el motivo "Inicio anticipado (disparo HH:mm)". Sin hora de disparo (retención manual, D2) no hay confirmación.
   - Tocar un ítem Listo solo informa que el despacho se confirma en el pase (Esc. 4); tocar uno anulado mientras estaba en pantalla recibe 409 con el estado vigente e informa la anulación sin cambiarlo (Esc. 6). Otros conflictos avisan que el ítem cambió en otra pantalla.
   - Criterio de Aceptación: Escenarios 1 a 6 de HU014; `CicloVidaItemServiceTest`; smoke `smoke_hu014.cjs` 20/20 (la anulación se simula en BD hasta HU032).
+
+- [x] **TASK-058 [FULL] [F1] Pantalla de Pase (D9, despacho de HU013)**
+  - `GET /api/v1/items/listos` (Expedidor/Admin): ítems Listos de todas las estaciones en orden de llegada, con `itemsPendientesPedido` (ítems del pedido que siguen en cocina).
+  - Ruta `/pase` (`PasePage`): Listos agrupados por pedido con semáforo de SLA, aviso "Faltan N en cocina" o "Pedido completo", botón "Despachar" por ítem y "Despachar listos" por pedido (con un único resumen si algo falla). Se actualiza con `/topic/items`.
+  - El expedidor entra con su PIN directo al pase; la ruta `/pase` queda permitida en Spring Security como las demás rutas de la SPA.
+  - Utilidades comunes de cocina y pase en `src/utils/cocina.ts` y recarga agrupada ante ráfagas en `useRecargaAgrupada`.
+  - Criterio de Aceptación: `CocinaServiceTest`, `ItemCocinaMapperTest`; smoke `smoke_hu013_pase.cjs` 14/14.

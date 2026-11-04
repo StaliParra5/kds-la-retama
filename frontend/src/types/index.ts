@@ -149,4 +149,5 @@ export interface ItemCocina {
   mesaNumero?: string | null;
   fechaEnvioCocina: string;
   itemsEnOtrasEstaciones: number;
+  itemsPendientesPedido: number;
 }

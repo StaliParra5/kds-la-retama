@@ -43,6 +43,10 @@ public final class ItemCocinaMapper {
                 .filter(otro -> !Objects.equals(otro.getEstacion().getId(), item.getEstacion().getId()))
                 .count();
         dto.setItemsEnOtrasEstaciones((int) enOtras);
+        long pendientes = pedido.getItems().stream()
+                .filter(otro -> otro.getEstadoItem().enColaDeCocina())
+                .count();
+        dto.setItemsPendientesPedido((int) pendientes);
         return dto;
     }
 }

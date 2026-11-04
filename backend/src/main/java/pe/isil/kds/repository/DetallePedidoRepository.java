@@ -21,4 +21,8 @@ public interface DetallePedidoRepository extends JpaRepository<DetallePedido, Lo
     // gracias a hibernate.default_batch_fetch_size, sin multiplicar las filas de la cola
     @EntityGraph(attributePaths = {"pedido", "plato", "estacion"})
     List<DetallePedido> findByEstacionIdAndEstadoItemInOrderByPedidoFechaEnvioCocinaAscIdAsc(Long estacionId, List<EstadoItem> estados);
+
+    // Ítems de todas las estaciones en un estado (el pase lista los Listos), en orden de llegada a cocina
+    @EntityGraph(attributePaths = {"pedido", "plato", "estacion"})
+    List<DetallePedido> findByEstadoItemOrderByPedidoFechaEnvioCocinaAscIdAsc(EstadoItem estado);
 }

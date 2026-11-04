@@ -7,6 +7,8 @@ export const rutaInicio = (rol: RolCodigo | undefined): string => {
       return '/admin/platos';
     case 'COCINERO':
       return '/cocina';
+    case 'EXPEDIDOR':
+      return '/pase';
     default:
       return '/comandero';
   }
