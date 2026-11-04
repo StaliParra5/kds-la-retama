@@ -10,6 +10,7 @@ import { ToastProvider } from './context/ToastContext';
 import { AdminCanalesPage } from './pages/AdminCanalesPage';
 import { AdminEstacionesPage } from './pages/AdminEstacionesPage';
 import { AdminMesasPage } from './pages/AdminMesasPage';
+import { AdminMozosPage } from './pages/AdminMozosPage';
 import { AdminProductosPage } from './pages/AdminProductosPage';
 import { CocinaPage } from './pages/CocinaPage';
 import { ComanderoPage } from './pages/ComanderoPage';
@@ -140,6 +141,16 @@ export default function App() {
                 element={
                   <ProtectedRoute requiredRole="ADMIN">
                     <AdminMesasPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* HU042: Gestión de Mozos */}
+              <Route
+                path="/admin/mozos"
+                element={
+                  <ProtectedRoute requiredRole="ADMIN">
+                    <AdminMozosPage />
                   </ProtectedRoute>
                 }
               />

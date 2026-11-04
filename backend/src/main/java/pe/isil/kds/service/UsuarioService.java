@@ -63,6 +63,8 @@ public class UsuarioService {
 
         // Actualizar rol del usuario
         usuario.setRol(nuevoRol);
+        // El rol viaja en el token: las sesiones abiertas con el rol anterior dejan de valer
+        usuario.revocarSesiones();
         Usuario guardado = usuarioRepository.save(usuario);
 
         return convertirADto(guardado);

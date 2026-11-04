@@ -50,6 +50,16 @@ export interface Zona {
   mesas: Mesa[];
 }
 
+// HU042: mozo gestionado por el administrador (nunca viaja el PIN)
+export interface Mozo {
+  id: number;
+  username: string;
+  nombre: string;
+  apellido: string;
+  activo: boolean;
+  tieneHistorial: boolean;
+}
+
 export interface CanalVenta {
   id: number;
   codigo: 'SALON' | 'PARA_LLEVAR' | 'DELIVERY';

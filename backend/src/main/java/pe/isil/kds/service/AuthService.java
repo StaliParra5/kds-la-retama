@@ -76,7 +76,7 @@ public class AuthService {
 
         // Optimización de rendimiento: Si el cliente envía username/código, lookup directo O(1)
         if (request.getUsername() != null && !request.getUsername().isBlank()) {
-            Usuario u = usuarioRepository.findByUsername(request.getUsername().trim())
+            Usuario u = usuarioRepository.findByUsernameIgnoreCase(request.getUsername().trim())
                     .orElseThrow(() -> new BadCredentialsException("PIN no reconocido o usuario inactivo"));
             if (Boolean.TRUE.equals(u.getActivo()) && u.getPinHash() != null && passwordEncoder.matches(request.getPin(), u.getPinHash())) {
                 usuarioEncontrado = u;

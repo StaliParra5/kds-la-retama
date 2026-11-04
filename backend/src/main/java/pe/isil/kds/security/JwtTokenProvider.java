@@ -37,6 +37,14 @@ public class JwtTokenProvider {
         this.expirationMs = expirationMs;
     }
 
+    // Opcional para que las pruebas unitarias construyan el proveedor sin base de datos
+    private VigenciaSesion vigenciaSesion;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setVigenciaSesion(VigenciaSesion vigenciaSesion) {
+        this.vigenciaSesion = vigenciaSesion;
+    }
+
     public String generateToken(Long usuarioId, String username, String role) {
         return generateToken(usuarioId, username, role, null);
     }
@@ -83,6 +91,11 @@ public class JwtTokenProvider {
             // Una sola verificación de firma y expiración por petición
             claims = getClaims(token);
         } catch (JwtException | IllegalArgumentException e) {
+            return null;
+        }
+        // HU042: un usuario desactivado, o con PIN o rol cambiados, pierde las sesiones ya abiertas
+        Long usuarioId = claims.get("usuarioId") instanceof Number id ? id.longValue() : null;
+        if (vigenciaSesion != null && !vigenciaSesion.vigente(usuarioId, claims.getIssuedAt())) {
             return null;
         }
         String username = claims.getSubject();

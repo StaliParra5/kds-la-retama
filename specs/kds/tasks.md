@@ -315,3 +315,11 @@
   - El comandero (`GET /mesas`) solo recibe mesas activas de zonas activas y `POST /pedidos` rechaza mesas o zonas inactivas. Registrar un pedido y desactivar o mover su mesa se serializan con `SELECT ... FOR UPDATE` sobre la fila de la mesa.
   - `AdminMesasPage`: nueva zona, ficha de la zona elegida (editar, desactivar, reactivar), mesas inactivas y en atención marcadas, edición de mesa al tocarla; el número de mesa admite letras (B1).
   - Criterio de Aceptación: Escenarios 1 a 6 de HU040 y HU041; `MesaServiceTest` (19 casos), `PedidoServiceTest`; smoke `smoke_hu040_041.cjs` 28/28.
+
+- [x] **TASK-061 [FULL] [B1] Gestión de mozos (HU042)**
+  - API Admin `/api/v1/mozos`: listar, crear (usuario, nombre, apellido, PIN de 4 dígitos), editar nombre y apellido, `PUT /{id}/pin`, `PATCH /{id}/estado`, `DELETE /{id}`. Solo opera sobre usuarios con rol Mozo.
+  - Usuario único sin distinguir mayúsculas (también en el login por PIN y con índice `lower(username)` en V11). El PIN no puede coincidir con el de ningún otro usuario, activo o no (el login por PIN rechaza los PIN compartidos; así ni reactivar ni cambiar el rol deja uno repetido); las asignaciones de PIN se serializan con bloqueo de fila y el mensaje no revela de quién es.
+  - Revocación de sesiones: desactivar, cambiar el PIN o el rol fija `sesiones_validas_desde` (V11) y `VigenciaSesion` rechaza, en HTTP y en STOMP, los tokens emitidos antes o de usuarios inactivos o eliminados.
+  - Con pedidos o transiciones registradas no se elimina: 409 con `codigo: MOZO_CON_HISTORIAL` (también si el pedido llega durante el borrado) y la pantalla ofrece desactivarlo.
+  - `AdminMozosPage` en `/admin/mozos` (enlace "Mozos" en el menú del admin).
+  - Criterio de Aceptación: Escenarios 1 a 8 de HU042; `MozoServiceTest`, `VigenciaSesionTest`; smoke `smoke_hu042.cjs` 28/28.

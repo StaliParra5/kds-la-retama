@@ -31,6 +31,11 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
 
     boolean existsByMesaIdAndEstadoIn(Long mesaId, List<EstadoPedido> estados);
 
+    boolean existsByUsuarioId(Long usuarioId);
+
+    @Query("SELECT DISTINCT p.usuario.id FROM Pedido p WHERE p.usuario.id IN :ids")
+    List<Long> idsUsuariosConPedidos(@Param("ids") List<Long> ids);
+
     @Query("SELECT COUNT(p) FROM Pedido p WHERE p.createdAt >= :desde")
     long countPedidosDesde(LocalDateTime desde);
 
