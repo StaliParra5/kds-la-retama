@@ -11,9 +11,6 @@ import pe.isil.kds.model.Usuario;
 import pe.isil.kds.repository.UsuarioRepository;
 import pe.isil.kds.security.VigenciaSesion;
 
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.Date;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -37,16 +34,12 @@ class VigenciaSesionTest {
         mozo.setActivo(true);
     }
 
-    private static Date haceMinutos(long minutos) {
-        return Date.from(LocalDateTime.now().minusMinutes(minutos).atZone(ZoneId.systemDefault()).toInstant());
-    }
-
     @Test
-    @DisplayName("HU042: Un token de un usuario activo sin revocaciones sigue vigente")
-    void usuarioActivo_Vigente() {
+    @DisplayName("HU042: Un token con la versión de sesión actual de un usuario activo sigue vigente")
+    void versionActual_Vigente() {
         when(usuarioRepository.findById(10L)).thenReturn(Optional.of(mozo));
 
-        assertTrue(vigenciaSesion.vigente(10L, haceMinutos(30)));
+        assertTrue(vigenciaSesion.vigente(10L, 0));
     }
 
     @Test
@@ -55,17 +48,18 @@ class VigenciaSesionTest {
         mozo.setActivo(false);
         when(usuarioRepository.findById(10L)).thenReturn(Optional.of(mozo));
 
-        assertFalse(vigenciaSesion.vigente(10L, haceMinutos(1)));
+        assertFalse(vigenciaSesion.vigente(10L, 0));
     }
 
     @Test
-    @DisplayName("HU042 Escenario 5: Un token emitido antes del cambio de PIN deja de valer; uno posterior sí vale")
-    void tokenAnteriorALaRevocacion_NoVigente() {
-        mozo.setSesionesValidasDesde(LocalDateTime.now().minusMinutes(10));
+    @DisplayName("HU042 Escenario 5: Tras revocar, el token anterior deja de valer y el nuevo sí vale, aunque se emitan en el mismo segundo")
+    void revocacion_InvalidaVersionAnterior() {
         when(usuarioRepository.findById(10L)).thenReturn(Optional.of(mozo));
 
-        assertFalse(vigenciaSesion.vigente(10L, haceMinutos(20)));
-        assertTrue(vigenciaSesion.vigente(10L, haceMinutos(5)));
+        mozo.revocarSesiones();
+
+        assertFalse(vigenciaSesion.vigente(10L, 0));
+        assertTrue(vigenciaSesion.vigente(10L, 1));
     }
 
     @Test
@@ -73,7 +67,7 @@ class VigenciaSesionTest {
     void usuarioEliminado_NoVigente() {
         when(usuarioRepository.findById(10L)).thenReturn(Optional.empty());
 
-        assertFalse(vigenciaSesion.vigente(10L, haceMinutos(1)));
-        assertFalse(vigenciaSesion.vigente(null, haceMinutos(1)));
+        assertFalse(vigenciaSesion.vigente(10L, 0));
+        assertFalse(vigenciaSesion.vigente(null, 0));
     }
 }

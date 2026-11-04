@@ -82,7 +82,7 @@ class AuthServiceTest {
     void loginAdmin_Exitoso() {
         when(usuarioRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
         when(passwordEncoder.matches("admin123", "hashedPass")).thenReturn(true);
-        when(tokenProvider.generateToken(1L, "admin", "ADMIN")).thenReturn("fake-jwt-token");
+        when(tokenProvider.generateToken(1L, "admin", "ADMIN", null, 0)).thenReturn("fake-jwt-token");
 
         AuthResponse response = authService.loginAdmin(new AuthRequest("admin", "admin123"));
 
@@ -107,7 +107,7 @@ class AuthServiceTest {
         when(usuarioRepository.findByActivoTrue()).thenReturn(List.of(cocineroUser));
         when(passwordEncoder.matches("1234", "hashedPin")).thenReturn(true);
         when(estacionRepository.findById(10L)).thenReturn(Optional.of(estacionPlancha));
-        when(tokenProvider.generateToken(2L, "cocinero1", "COCINERO", 10L)).thenReturn("cocina-jwt-token");
+        when(tokenProvider.generateToken(2L, "cocinero1", "COCINERO", 10L, 0)).thenReturn("cocina-jwt-token");
 
         AuthResponse response = authService.loginPin(new PinAuthRequest("1234", 10L));
 
@@ -153,7 +153,7 @@ class AuthServiceTest {
         when(usuarioRepository.findByActivoTrue()).thenReturn(List.of(adminUser, cocineroUser));
         when(passwordEncoder.matches("1234", "hashedPinAdmin")).thenReturn(true);
         when(passwordEncoder.matches("1234", "hashedPin")).thenReturn(true);
-        when(tokenProvider.generateToken(2L, "cocinero1", "COCINERO", null)).thenReturn("cocina-jwt-token");
+        when(tokenProvider.generateToken(2L, "cocinero1", "COCINERO", null, 0)).thenReturn("cocina-jwt-token");
 
         AuthResponse response = authService.loginPin(new PinAuthRequest("1234", null));
 

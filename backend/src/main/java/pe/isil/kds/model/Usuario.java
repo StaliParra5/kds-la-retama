@@ -47,9 +47,9 @@ public class Usuario {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    // Tokens emitidos antes de este instante ya no autentican (HU042)
-    @Column(name = "sesiones_validas_desde")
-    private LocalDateTime sesionesValidasDesde;
+    // Versión que viaja en el token: al cambiar, los tokens emitidos antes dejan de autenticar (HU042)
+    @Column(name = "version_sesion", nullable = false)
+    private Integer versionSesion = 0;
 
     public Usuario() {}
 
@@ -80,14 +80,14 @@ public class Usuario {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
-    public LocalDateTime getSesionesValidasDesde() { return sesionesValidasDesde; }
-    public void setSesionesValidasDesde(LocalDateTime sesionesValidasDesde) { this.sesionesValidasDesde = sesionesValidasDesde; }
+    public Integer getVersionSesion() { return versionSesion; }
+    public void setVersionSesion(Integer versionSesion) { this.versionSesion = versionSesion; }
 
     /**
-     * Invalida los tokens ya emitidos (desactivación, cambio de PIN o de rol). Se trunca al segundo
-     * porque la fecha de emisión del JWT viaja en segundos: un login posterior sigue siendo válido.
+     * Invalida los tokens ya emitidos (desactivación, cambio de PIN o de rol): los tokens nuevos
+     * llevarán la versión siguiente.
      */
     public void revocarSesiones() {
-        this.sesionesValidasDesde = LocalDateTime.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        this.versionSesion = (versionSesion == null ? 0 : versionSesion) + 1;
     }
 }

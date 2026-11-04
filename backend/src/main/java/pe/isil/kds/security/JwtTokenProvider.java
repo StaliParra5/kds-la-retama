@@ -50,6 +50,11 @@ public class JwtTokenProvider {
     }
 
     public String generateToken(Long usuarioId, String username, String role, Long estacionId) {
+        return generateToken(usuarioId, username, role, estacionId, 0);
+    }
+
+    // versionSesion: versión vigente del usuario al emitir el token (HU042, revocación de sesiones)
+    public String generateToken(Long usuarioId, String username, String role, Long estacionId, int versionSesion) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationMs);
 
@@ -58,6 +63,7 @@ public class JwtTokenProvider {
                 .claim("usuarioId", usuarioId)
                 .claim("role", role)
                 .claim("estacionId", estacionId)
+                .claim("ver", versionSesion)
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(secretKey)
@@ -95,7 +101,8 @@ public class JwtTokenProvider {
         }
         // HU042: un usuario desactivado, o con PIN o rol cambiados, pierde las sesiones ya abiertas
         Long usuarioId = claims.get("usuarioId") instanceof Number id ? id.longValue() : null;
-        if (vigenciaSesion != null && !vigenciaSesion.vigente(usuarioId, claims.getIssuedAt())) {
+        int versionSesion = claims.get("ver") instanceof Number v ? v.intValue() : 0;
+        if (vigenciaSesion != null && !vigenciaSesion.vigente(usuarioId, versionSesion)) {
             return null;
         }
         String username = claims.getSubject();

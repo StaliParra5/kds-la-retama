@@ -57,7 +57,7 @@ public class AuthService {
         }
 
         String rolCodigo = usuario.getRol().getCodigo();
-        String token = tokenProvider.generateToken(usuario.getId(), usuario.getUsername(), rolCodigo);
+        String token = tokenProvider.generateToken(usuario.getId(), usuario.getUsername(), rolCodigo, null, usuario.getVersionSesion());
 
         return new AuthResponse(
                 token,
@@ -122,7 +122,8 @@ public class AuthService {
             }
         }
 
-        String token = tokenProvider.generateToken(usuarioEncontrado.getId(), usuarioEncontrado.getUsername(), rolCodigo, estacionId);
+        String token = tokenProvider.generateToken(usuarioEncontrado.getId(), usuarioEncontrado.getUsername(), rolCodigo, estacionId,
+                usuarioEncontrado.getVersionSesion());
 
         return new AuthResponse(
                 token,

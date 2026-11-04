@@ -229,7 +229,7 @@ class MozoServiceTest {
 
         mozoService.cambiarPin(10L, "2468");
 
-        assertNotNull(angie.getSesionesValidasDesde());
+        assertEquals(1, angie.getVersionSesion());
     }
 
     @Test
@@ -239,9 +239,9 @@ class MozoServiceTest {
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(i -> i.getArgument(0));
 
         mozoService.cambiarEstado(10L, true);
-        assertNull(angie.getSesionesValidasDesde());
+        assertEquals(0, angie.getVersionSesion());
         mozoService.cambiarEstado(10L, false);
-        assertNotNull(angie.getSesionesValidasDesde());
+        assertEquals(1, angie.getVersionSesion());
     }
 
     @Test
