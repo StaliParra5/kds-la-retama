@@ -17,12 +17,39 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Estación vinculada a esta PC (HU004), guardada en el navegador
+const estacionVinculada = (): { id: number | null; nombre: string | null } => {
+  try {
+    const id = localStorage.getItem('kds_terminal_station_id');
+    return {
+      id: id ? Number(id) : null,
+      nombre: localStorage.getItem('kds_terminal_station_name'),
+    };
+  } catch {
+    return { id: null, nombre: null };
+  }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UsuarioSesion | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [estacionId, setEstacionId] = useState<number | null>(null);
   const [estacionNombre, setEstacionNombre] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // La vinculación de la PC (HU004) se comparte entre pestañas: si el admin la cambia en otra,
+  // esta pestaña la refleja sin recargar
+  useEffect(() => {
+    const alCambiarStorage = (e: StorageEvent) => {
+      if (e.key === null || e.key.startsWith('kds_terminal_station')) {
+        const vinculada = estacionVinculada();
+        setEstacionId(vinculada.id);
+        setEstacionNombre(vinculada.nombre);
+      }
+    };
+    window.addEventListener('storage', alCambiarStorage);
+    return () => window.removeEventListener('storage', alCambiarStorage);
+  }, []);
 
   // Inicializar estado persistido desde localStorage al arrancar la app
   useEffect(() => {
@@ -69,8 +96,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginPin = async (pin: string, stationIdParam?: number | null): Promise<UsuarioSesion> => {
-    // Si no se pasa estación explícita, se usa la vinculada a esta PC terminal
-    const activeStation = stationIdParam || estacionId;
+    // Si no se pasa estación explícita, se usa la vinculada a esta PC terminal. Se lee de
+    // localStorage y no del estado: otra pestaña pudo vincular la PC después de abrir esta.
+    const activeStation = stationIdParam || estacionVinculada().id;
     const res = await apiClient.post<AuthResponse>('/auth/login-pin', {
       pin,
       estacionId: activeStation,

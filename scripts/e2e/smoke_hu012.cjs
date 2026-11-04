@@ -61,12 +61,17 @@ const rechaza = async (promesa) => {
     await page.setViewport({ width: 1440, height: 900 });
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(`${BASE}/login`, { waitUntil: 'networkidle0' });
-    await page.evaluate((idFrios) => {
-      localStorage.clear();
+    await page.evaluate(() => localStorage.clear());
+    await page.reload({ waitUntil: 'networkidle0' });
+    // La PC se vincula desde OTRA pestaña con el login ya abierto: esta pestaña no se recarga
+    const pVincula = await browser.newPage();
+    await pVincula.goto(`${BASE}/login`, { waitUntil: 'networkidle0' });
+    await pVincula.evaluate((idFrios) => {
       localStorage.setItem('kds_terminal_station_id', String(idFrios));
       localStorage.setItem('kds_terminal_station_name', 'Fríos');
     }, id('FRIOS'));
-    await page.reload({ waitUntil: 'networkidle0' });
+    await pVincula.close();
+    await page.bringToFront();
     for (const d of '5678') {
       await page.evaluate((digito) => {
         const b = Array.from(document.querySelectorAll('button')).find((x) => x.textContent.trim() === digito);
