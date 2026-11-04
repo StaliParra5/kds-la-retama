@@ -13,7 +13,7 @@ import pe.isil.kds.exception.OperacionNoPermitidaException;
 import pe.isil.kds.model.Mesa;
 import pe.isil.kds.model.Zona;
 import pe.isil.kds.repository.MesaRepository;
-import pe.isil.kds.repository.PedidoRepository;
+import pe.isil.kds.repository.AtencionMesaRepository;
 import pe.isil.kds.repository.ZonaRepository;
 import pe.isil.kds.service.MesaService;
 
@@ -34,7 +34,7 @@ class MesaServiceTest {
     private MesaRepository mesaRepository;
 
     @Mock
-    private PedidoRepository pedidoRepository;
+    private AtencionMesaRepository atencionRepository;
 
     @InjectMocks
     private MesaService mesaService;
@@ -107,7 +107,7 @@ class MesaServiceTest {
     @DisplayName("HU040 Escenario 4: Una zona sin mesas en atención se desactiva")
     void desactivarZona_SinAtencion() {
         when(zonaRepository.findById(1L)).thenReturn(Optional.of(salon));
-        when(pedidoRepository.idsMesasConPedidoEn(anyList())).thenReturn(List.of());
+        when(atencionRepository.idsMesasAbiertas()).thenReturn(List.of());
         when(mesaRepository.bloquearPorZona(1L)).thenReturn(List.of(mesa05));
         when(zonaRepository.save(any(Zona.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -119,7 +119,7 @@ class MesaServiceTest {
     @DisplayName("HU040 Escenario 5: Una zona con mesas en atención no se desactiva e indica cuáles")
     void desactivarZona_ConMesasEnAtencion() {
         when(zonaRepository.findById(1L)).thenReturn(Optional.of(salon));
-        when(pedidoRepository.idsMesasConPedidoEn(anyList())).thenReturn(List.of(10L));
+        when(atencionRepository.idsMesasAbiertas()).thenReturn(List.of(10L));
         when(mesaRepository.bloquearPorZona(1L)).thenReturn(List.of(mesa05, mesa(11L, salon, "06")));
 
         OperacionNoPermitidaException ex = assertThrows(OperacionNoPermitidaException.class,
@@ -138,7 +138,7 @@ class MesaServiceTest {
         when(zonaRepository.save(any(Zona.class))).thenAnswer(i -> i.getArgument(0));
 
         assertTrue(mesaService.cambiarEstadoZona(1L, true).getActivo());
-        verify(pedidoRepository, never()).idsMesasConPedidoEn(anyList());
+        verify(atencionRepository, never()).idsMesasAbiertas();
     }
 
     @Test
@@ -149,7 +149,7 @@ class MesaServiceTest {
         b1.setActivo(false);
         when(zonaRepository.findAllByOrderByIdAsc()).thenReturn(List.of(salon, barra));
         when(mesaRepository.findAll()).thenReturn(List.of(b1, mesa05));
-        when(pedidoRepository.idsMesasConPedidoEn(anyList())).thenReturn(List.of(10L));
+        when(atencionRepository.idsMesasAbiertas()).thenReturn(List.of(10L));
 
         List<ZonaDto> zonas = mesaService.listarZonasAdmin();
 
@@ -166,7 +166,7 @@ class MesaServiceTest {
     void editarMesa_NumeroYCapacidad() {
         when(mesaRepository.bloquearPorId(10L)).thenReturn(Optional.of(mesa05));
         when(zonaRepository.findById(1L)).thenReturn(Optional.of(salon));
-        when(pedidoRepository.existsByMesaIdAndEstadoIn(anyLong(), anyList())).thenReturn(false);
+        when(atencionRepository.existsByMesaIdAndLiberadaEnIsNull(anyLong())).thenReturn(false);
         when(mesaRepository.findByZonaIdAndNumeroMesaIgnoreCase(1L, "5A")).thenReturn(Optional.empty());
         when(mesaRepository.save(any(Mesa.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -182,7 +182,7 @@ class MesaServiceTest {
         Mesa mesa06 = mesa(11L, salon, "06");
         when(mesaRepository.bloquearPorId(11L)).thenReturn(Optional.of(mesa06));
         when(zonaRepository.findById(1L)).thenReturn(Optional.of(salon));
-        when(pedidoRepository.existsByMesaIdAndEstadoIn(anyLong(), anyList())).thenReturn(false);
+        when(atencionRepository.existsByMesaIdAndLiberadaEnIsNull(anyLong())).thenReturn(false);
         when(mesaRepository.findByZonaIdAndNumeroMesaIgnoreCase(1L, "05")).thenReturn(Optional.of(mesa05));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
@@ -196,7 +196,7 @@ class MesaServiceTest {
     void editarMesa_MoverZona() {
         when(mesaRepository.bloquearPorId(10L)).thenReturn(Optional.of(mesa05));
         when(zonaRepository.findById(2L)).thenReturn(Optional.of(terraza));
-        when(pedidoRepository.existsByMesaIdAndEstadoIn(anyLong(), anyList())).thenReturn(false);
+        when(atencionRepository.existsByMesaIdAndLiberadaEnIsNull(anyLong())).thenReturn(false);
         when(mesaRepository.findByZonaIdAndNumeroMesaIgnoreCase(2L, "05")).thenReturn(Optional.empty());
         when(mesaRepository.save(any(Mesa.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -211,7 +211,7 @@ class MesaServiceTest {
     void editarMesa_MoverZona_NumeroOcupado() {
         when(mesaRepository.bloquearPorId(10L)).thenReturn(Optional.of(mesa05));
         when(zonaRepository.findById(2L)).thenReturn(Optional.of(terraza));
-        when(pedidoRepository.existsByMesaIdAndEstadoIn(anyLong(), anyList())).thenReturn(false);
+        when(atencionRepository.existsByMesaIdAndLiberadaEnIsNull(anyLong())).thenReturn(false);
         when(mesaRepository.findByZonaIdAndNumeroMesaIgnoreCase(2L, "05")).thenReturn(Optional.of(mesa(30L, terraza, "05")));
 
         assertThrows(IllegalArgumentException.class, () -> mesaService.editarMesa(10L, 2L, "05", 4));
@@ -222,7 +222,7 @@ class MesaServiceTest {
     @DisplayName("HU041 Escenario 4: Una mesa sin atención se desactiva")
     void desactivarMesa_SinAtencion() {
         when(mesaRepository.bloquearPorId(10L)).thenReturn(Optional.of(mesa05));
-        when(pedidoRepository.existsByMesaIdAndEstadoIn(anyLong(), anyList())).thenReturn(false);
+        when(atencionRepository.existsByMesaIdAndLiberadaEnIsNull(anyLong())).thenReturn(false);
         when(mesaRepository.save(any(Mesa.class))).thenAnswer(i -> i.getArgument(0));
 
         assertFalse(mesaService.cambiarEstadoMesa(10L, false).getActivo());
@@ -233,7 +233,7 @@ class MesaServiceTest {
     void mesaEnAtencion_NoSeDesactivaNiMueve() {
         when(mesaRepository.bloquearPorId(10L)).thenReturn(Optional.of(mesa05));
         when(zonaRepository.findById(2L)).thenReturn(Optional.of(terraza));
-        when(pedidoRepository.existsByMesaIdAndEstadoIn(eq(10L), anyList())).thenReturn(true);
+        when(atencionRepository.existsByMesaIdAndLiberadaEnIsNull(10L)).thenReturn(true);
 
         assertThrows(OperacionNoPermitidaException.class, () -> mesaService.cambiarEstadoMesa(10L, false));
         assertThrows(OperacionNoPermitidaException.class, () -> mesaService.editarMesa(10L, 2L, "05", 4));
@@ -247,7 +247,7 @@ class MesaServiceTest {
     void mesaEnAtencion_EditaEnSuZona() {
         when(mesaRepository.bloquearPorId(10L)).thenReturn(Optional.of(mesa05));
         when(zonaRepository.findById(1L)).thenReturn(Optional.of(salon));
-        when(pedidoRepository.existsByMesaIdAndEstadoIn(eq(10L), anyList())).thenReturn(true);
+        when(atencionRepository.existsByMesaIdAndLiberadaEnIsNull(10L)).thenReturn(true);
         when(mesaRepository.findByZonaIdAndNumeroMesaIgnoreCase(1L, "05")).thenReturn(Optional.of(mesa05));
         when(mesaRepository.save(any(Mesa.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -262,7 +262,7 @@ class MesaServiceTest {
     void reactivarMesa() {
         mesa05.setActivo(false);
         when(mesaRepository.bloquearPorId(10L)).thenReturn(Optional.of(mesa05));
-        when(pedidoRepository.existsByMesaIdAndEstadoIn(anyLong(), anyList())).thenReturn(false);
+        when(atencionRepository.existsByMesaIdAndLiberadaEnIsNull(anyLong())).thenReturn(false);
         when(mesaRepository.save(any(Mesa.class))).thenAnswer(i -> i.getArgument(0));
 
         assertTrue(mesaService.cambiarEstadoMesa(10L, true).getActivo());
@@ -274,7 +274,7 @@ class MesaServiceTest {
         terraza.setActivo(false);
         when(mesaRepository.bloquearPorId(10L)).thenReturn(Optional.of(mesa05));
         when(zonaRepository.findById(2L)).thenReturn(Optional.of(terraza));
-        when(pedidoRepository.existsByMesaIdAndEstadoIn(anyLong(), anyList())).thenReturn(false);
+        when(atencionRepository.existsByMesaIdAndLiberadaEnIsNull(anyLong())).thenReturn(false);
 
         assertThrows(IllegalArgumentException.class, () -> mesaService.editarMesa(10L, 2L, "05", 4));
         assertEquals(salon, mesa05.getZona());
@@ -315,6 +315,7 @@ class MesaServiceTest {
         assertEquals(1, mesaService.listarMesas().size());
         verify(mesaRepository, never()).findAll();
     }
+
 
     private static Zona zona(Long id, String nombre, boolean activo) {
         Zona z = new Zona();

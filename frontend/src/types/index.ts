@@ -50,6 +50,23 @@ export interface Zona {
   mesas: Mesa[];
 }
 
+// HU044/HU046: atención de una mesa (desde que se abre hasta que se libera) con sus pedidos
+export interface AtencionMesa {
+  id: number;
+  mesaId: number;
+  mesaNumero: string;
+  zonaId: number;
+  zonaNombre: string;
+  capacidad: number;
+  personas: number;
+  mozoNombre: string;
+  abiertaEn: string;
+  liberadaEn?: string | null;
+  liberadaPorNombre?: string | null;
+  itemsPendientes: number;
+  pedidos: PedidoResponse[];
+}
+
 // HU042: mozo gestionado por el administrador (nunca viaja el PIN)
 export interface Mozo {
   id: number;

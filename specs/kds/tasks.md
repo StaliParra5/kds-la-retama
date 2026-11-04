@@ -330,3 +330,10 @@
   - Una zona inactiva ya asignada se conserva al editar la asignación (vuelve a operar al reactivarse); una nueva debe estar activa.
   - `AdminMozosPage`: zonas de cada mozo y diálogo "Zonas" con casillas; el comandero avisa "Sin zonas asignadas", ya no arranca con una mesa fija y recarga mesas y zonas ante un 400/403. Cerrar sesión limpia la caché de consultas para que el siguiente usuario de la terminal no vea datos del anterior.
   - Criterio de Aceptación: Escenarios 1 a 5 de HU043; `MozoServiceTest`, `MesaServiceTest`, `PedidoServiceTest`; smoke `smoke_hu043.cjs` 17/17.
+
+- [x] **TASK-063 [FULL] [F2] Abrir la mesa antes del comandero y liberarla (HU044, HU046, D19)**
+  - Tabla `atenciones_mesa` (V14) con índice único parcial: una sola atención abierta por mesa. `pedidos.atencion_id` enlaza cada pedido de salón con su atención; las mesas con pedidos en curso al migrar quedan con su atención abierta.
+  - API Mozo: `POST /mesas/{id}/atencion` (abre con personas si está libre o devuelve la abierta), `GET /mesas/{id}/atencion` (también Admin) y `POST /mesas/{id}/atencion/liberar` (409 si quedan ítems por despachar; los anulados no cuentan). Abrir, liberar y registrar pedidos bloquean la fila de la mesa.
+  - `POST /pedidos` de salón exige la atención abierta (409 `MESA_SIN_ATENCION`); una mesa o zona inactiva responde 409 `MESA_NO_DISPONIBLE` (antes 400), y con esos códigos o un 403 el comandero vuelve a la elección de mesa conservando los platos. "Mesa en atención" (HU040/HU041) pasa a ser "atención abierta" y `/zonas` y `/mesas` marcan cada mesa como libre o en atención.
+  - Comandero: `SeleccionDestino` (canal → zona → mesa → personas) antes de la carta; encabezado con mesa, personas y mozo, "Cambiar mesa" (confirma si hay platos sin enviar), "Liberar mesa" y la lista de pedidos de la mesa con el estado de cada ítem.
+  - Criterio de Aceptación: Escenarios 1 a 6 de HU044 y 1 a 5 de HU046; `AtencionServiceTest`, `PedidoServiceTest`, `MesaServiceTest`; smoke `smoke_hu044_046.cjs` 28/28.

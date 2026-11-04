@@ -6,14 +6,12 @@ import pe.isil.kds.dto.MesaDto;
 import pe.isil.kds.dto.ZonaDto;
 import pe.isil.kds.exception.OperacionNoPermitidaException;
 import pe.isil.kds.exception.RecursoNoEncontradoException;
-import pe.isil.kds.model.EstadoPedido;
 import pe.isil.kds.model.Mesa;
 import pe.isil.kds.model.Zona;
 import pe.isil.kds.repository.MesaRepository;
-import pe.isil.kds.repository.PedidoRepository;
+import pe.isil.kds.repository.AtencionMesaRepository;
 import pe.isil.kds.repository.ZonaRepository;
 
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -21,7 +19,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Servicio de Zonas y Mesas de Salón (HU005, HU040, HU041).
+ * Servicio de Zonas y Mesas de Salón (HU005, HU040, HU041, HU044).
  *
  * Reglas de Negocio:
  * - El número de mesa es único por zona, sin distinguir mayúsculas (HU005 Escenario 2, HU041 Escenario 2).
@@ -32,18 +30,15 @@ import java.util.stream.Collectors;
 @Service
 public class MesaService {
 
-    // Hasta HU044 una mesa está "en atención" mientras tenga un pedido sin terminar
-    private static final List<EstadoPedido> PEDIDO_EN_CURSO =
-            Arrays.stream(EstadoPedido.values()).filter(EstadoPedido::esActivo).toList();
-
     private final ZonaRepository zonaRepository;
     private final MesaRepository mesaRepository;
-    private final PedidoRepository pedidoRepository;
+    // Una mesa está "en atención" mientras tenga una atención abierta (HU044, D19)
+    private final AtencionMesaRepository atencionRepository;
 
-    public MesaService(ZonaRepository zonaRepository, MesaRepository mesaRepository, PedidoRepository pedidoRepository) {
+    public MesaService(ZonaRepository zonaRepository, MesaRepository mesaRepository, AtencionMesaRepository atencionRepository) {
         this.zonaRepository = zonaRepository;
         this.mesaRepository = mesaRepository;
-        this.pedidoRepository = pedidoRepository;
+        this.atencionRepository = atencionRepository;
     }
 
     @Transactional(readOnly = true)
@@ -57,11 +52,12 @@ public class MesaService {
      */
     @Transactional(readOnly = true)
     public List<ZonaDto> listarZonasConMesas(Set<Long> zonasPermitidas) {
+        Set<Long> enAtencion = mesasEnAtencion();
         return zonaRepository.findByActivoTrue().stream()
                 .filter(zona -> zonasPermitidas == null || zonasPermitidas.contains(zona.getId()))
                 .map(zona -> {
                     List<MesaDto> mesasDto = mesaRepository.findByZonaIdAndActivoTrue(zona.getId()).stream()
-                            .map(m -> aDto(m, false))
+                            .map(m -> aDto(m, enAtencion.contains(m.getId())))
                             .collect(Collectors.toList());
                     return new ZonaDto(zona.getId(), zona.getNombre(), zona.getDescripcion(), zona.getActivo(), mesasDto);
                 })
@@ -91,9 +87,10 @@ public class MesaService {
 
     @Transactional(readOnly = true)
     public List<MesaDto> listarMesas(Set<Long> zonasPermitidas) {
+        Set<Long> enAtencion = mesasEnAtencion();
         return mesaRepository.findByActivoTrueAndZonaActivoTrue().stream()
                 .filter(m -> zonasPermitidas == null || zonasPermitidas.contains(m.getZona().getId()))
-                .map(m -> aDto(m, false))
+                .map(m -> aDto(m, enAtencion.contains(m.getId())))
                 .collect(Collectors.toList());
     }
 
@@ -193,11 +190,11 @@ public class MesaService {
     }
 
     private Set<Long> mesasEnAtencion() {
-        return Set.copyOf(pedidoRepository.idsMesasConPedidoEn(PEDIDO_EN_CURSO));
+        return Set.copyOf(atencionRepository.idsMesasAbiertas());
     }
 
     private boolean estaEnAtencion(Long mesaId) {
-        return pedidoRepository.existsByMesaIdAndEstadoIn(mesaId, PEDIDO_EN_CURSO);
+        return atencionRepository.existsByMesaIdAndLiberadaEnIsNull(mesaId);
     }
 
     private void validarNombreLibre(String nombre, Long zonaActualId) {

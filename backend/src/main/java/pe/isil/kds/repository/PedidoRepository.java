@@ -25,13 +25,9 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
     List<Pedido> findByEstado(EstadoPedido estado);
     List<Pedido> findByEstadoInOrderByCreatedAtAsc(List<EstadoPedido> estados);
 
-    // Mesas con algún pedido en los estados indicados (mesas en atención, HU040/HU041)
-    @Query("SELECT DISTINCT p.mesa.id FROM Pedido p WHERE p.mesa IS NOT NULL AND p.estado IN :estados")
-    List<Long> idsMesasConPedidoEn(@Param("estados") List<EstadoPedido> estados);
-
-    boolean existsByMesaIdAndEstadoIn(Long mesaId, List<EstadoPedido> estados);
-
     boolean existsByUsuarioId(Long usuarioId);
+
+    List<Pedido> findByAtencionIdOrderByCreatedAtAsc(Long atencionId);
 
     @Query("SELECT DISTINCT p.usuario.id FROM Pedido p WHERE p.usuario.id IN :ids")
     List<Long> idsUsuariosConPedidos(@Param("ids") List<Long> ids);

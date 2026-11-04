@@ -7,7 +7,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import pe.isil.kds.dto.AbrirAtencionRequest;
+import pe.isil.kds.dto.AtencionMesaDto;
 import pe.isil.kds.dto.CambiarActivoRequest;
+import pe.isil.kds.service.AtencionService;
 import pe.isil.kds.dto.CrearMesaRequest;
 import pe.isil.kds.dto.GuardarZonaRequest;
 import pe.isil.kds.dto.MesaDto;
@@ -30,10 +33,35 @@ public class MesaController {
 
     private final MesaService mesaService;
     private final MozoService mozoService;
+    private final AtencionService atencionService;
 
-    public MesaController(MesaService mesaService, MozoService mozoService) {
+    public MesaController(MesaService mesaService, MozoService mozoService, AtencionService atencionService) {
         this.mesaService = mesaService;
         this.mozoService = mozoService;
+        this.atencionService = atencionService;
+    }
+
+    @Operation(summary = "Entrar a una mesa: abre su atención si está libre (exige personas) o devuelve la abierta (HU044)")
+    @PreAuthorize("hasRole('MOZO')")
+    @PostMapping("/mesas/{id}/atencion")
+    public ResponseEntity<AtencionMesaDto> entrarAMesa(@PathVariable Long id,
+                                                       @Valid @RequestBody AbrirAtencionRequest request,
+                                                       Authentication authentication) {
+        return ResponseEntity.ok(atencionService.entrar(id, request.getPersonas(), authentication.getName()));
+    }
+
+    @Operation(summary = "Consultar la atención abierta de una mesa con sus pedidos (HU044 Esc. 4)")
+    @PreAuthorize("hasAnyRole('MOZO', 'ADMIN')")
+    @GetMapping("/mesas/{id}/atencion")
+    public ResponseEntity<AtencionMesaDto> consultarAtencion(@PathVariable Long id, Authentication authentication) {
+        return ResponseEntity.ok(atencionService.consultar(id, SesionKds.de(authentication)));
+    }
+
+    @Operation(summary = "Liberar la mesa cuando el cliente se retira; exige que no queden ítems por despachar (HU046)")
+    @PreAuthorize("hasRole('MOZO')")
+    @PostMapping("/mesas/{id}/atencion/liberar")
+    public ResponseEntity<AtencionMesaDto> liberarMesa(@PathVariable Long id, Authentication authentication) {
+        return ResponseEntity.ok(atencionService.liberar(id, authentication.getName()));
     }
 
     // HU043: el mozo solo recibe sus zonas asignadas; el resto del personal ve todo el salón activo

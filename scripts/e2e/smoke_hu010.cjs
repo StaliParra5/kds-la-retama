@@ -60,7 +60,13 @@ const clickByText = (page, text) =>
     await sleep(800);
     const canales = await page.evaluate(() => document.body.innerText);
     check('Comandero muestra "Delivery propio"', canales.includes('Delivery propio'));
-    check('Salón seleccionado por defecto (selector de mesa visible)', canales.toUpperCase().includes('MESA:'));
+    check('HU044: antes de la carta se elige el destino (Salón disponible)', !!(await page.$('[data-canal="SALON"]')));
+
+    // HU010: Delivery propio pasa directo a la carta, sin mesa
+    await clickByText(page, 'Delivery propio');
+    await sleep(500);
+    const sinMesa = await page.evaluate(() => document.querySelector('[data-destino]')?.innerText.includes('Pedido sin mesa'));
+    check('HU010: en Delivery propio no se elige mesa', sinMesa);
 
     // Agregar el primer plato dos veces y ponerle modificador a la línea -> nueva línea
     const addButtons = await page.$$('button[title="Agregar a la comanda"]');
@@ -73,12 +79,6 @@ const clickByText = (page, text) =>
     const lineas = await page.$$('input[placeholder^="Nota de cocina"]');
     check('HU008: mismo plato con modificador distinto genera 2 líneas', lineas.length === 2, `líneas=${lineas.length}`);
     await page.screenshot({ path: path.join(OUT, 'hu010_01_comandero.png') });
-
-    // Cambiar a Delivery propio: el selector de mesa debe ocultarse
-    await clickByText(page, 'Delivery propio');
-    await sleep(300);
-    const sinMesa = await page.evaluate(() => !document.body.innerText.toUpperCase().includes('MESA:'));
-    check('HU010: en Delivery propio no se muestra selector de mesa', sinMesa);
 
     // Enviar comanda -> toast con canal
     await clickByText(page, 'ENVIAR A COCINA');

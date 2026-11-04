@@ -44,6 +44,11 @@ public class Pedido {
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
+    // HU044: atención de la mesa a la que pertenece el pedido de salón (nula fuera de salón)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "atencion_id")
+    private AtencionMesa atencion;
+
     @Column(name = "cliente_nombre", length = 120)
     private String clienteNombre;
 
@@ -113,6 +118,9 @@ public class Pedido {
 
     public String getClienteDireccion() { return clienteDireccion; }
     public void setClienteDireccion(String clienteDireccion) { this.clienteDireccion = clienteDireccion; }
+
+    public AtencionMesa getAtencion() { return atencion; }
+    public void setAtencion(AtencionMesa atencion) { this.atencion = atencion; }
 
     public EstadoPedido getEstado() { return estado; }
     public void setEstado(EstadoPedido estado) { this.estado = estado; }

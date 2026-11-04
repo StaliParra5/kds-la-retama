@@ -48,6 +48,7 @@ public class PedidoService {
     private final UsuarioRepository usuarioRepository;
     private final TrazabilidadService trazabilidadService;
     private final ApplicationEventPublisher eventPublisher;
+    private final AtencionMesaRepository atencionRepository;
 
     public PedidoService(
             PedidoRepository pedidoRepository,
@@ -56,7 +57,8 @@ public class PedidoService {
             PlatoRepository platoRepository,
             UsuarioRepository usuarioRepository,
             TrazabilidadService trazabilidadService,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            AtencionMesaRepository atencionRepository) {
         this.pedidoRepository = pedidoRepository;
         this.canalRepository = canalRepository;
         this.mesaRepository = mesaRepository;
@@ -64,7 +66,12 @@ public class PedidoService {
         this.usuarioRepository = usuarioRepository;
         this.trazabilidadService = trazabilidadService;
         this.eventPublisher = eventPublisher;
+        this.atencionRepository = atencionRepository;
     }
+
+    public static final String CODIGO_MESA_SIN_ATENCION = "MESA_SIN_ATENCION";
+    // La mesa se desactivó o su zona quedó inactiva: el comandero vuelve a la elección de mesa
+    public static final String CODIGO_MESA_NO_DISPONIBLE = "MESA_NO_DISPONIBLE";
 
     /** Resultado de un envío: el pedido y si se creó ahora (201) o ya existía para esa clave (200). */
     public record ResultadoEnvio(PedidoResponse pedido, boolean creado) {}
@@ -148,7 +155,8 @@ public class PedidoService {
             mesa = mesaRepository.bloquearPorId(request.getMesaId())
                     .orElseThrow(() -> new IllegalArgumentException("Mesa no encontrada con ID: " + request.getMesaId()));
             if (!Boolean.TRUE.equals(mesa.getActivo()) || !Boolean.TRUE.equals(mesa.getZona().getActivo())) {
-                throw new IllegalArgumentException("La mesa " + mesa.getNumeroMesa() + " no está disponible: fue desactivada o su zona está inactiva.");
+                throw new OperacionNoPermitidaException("La mesa " + mesa.getNumeroMesa() + " no está disponible: fue desactivada o su zona está inactiva.",
+                        PedidoService.CODIGO_MESA_NO_DISPONIBLE);
             }
         } else if (request.getMesaId() != null) {
             mesa = mesaRepository.findById(request.getMesaId()).orElse(null);
@@ -158,6 +166,7 @@ public class PedidoService {
                 .orElseThrow(() -> new IllegalArgumentException("Usuario mozo no encontrado: " + usernameMozo));
 
         // HU043 Escenario 3: el mozo solo registra pedidos de salón en mesas de sus zonas asignadas
+        AtencionMesa atencion = null;
         if ("SALON".equalsIgnoreCase(canal.getCodigo())) {
             Long zonaMesa = mesa.getZona().getId();
             boolean asignada = mozo.getZonas().stream().anyMatch(z -> z.getId().equals(zonaMesa));
@@ -165,6 +174,13 @@ public class PedidoService {
                 throw new AccessDeniedException("La mesa " + mesa.getNumeroMesa() + " pertenece a la zona '"
                         + mesa.getZona().getNombre() + "', que no tiene asignada.");
             }
+            // HU044 / D19: el pedido de salón cuelga de la atención abierta; la mesa ya está bloqueada,
+            // así que no puede liberarse mientras se registra
+            Mesa mesaPedido = mesa;
+            atencion = atencionRepository.findByMesaIdAndLiberadaEnIsNull(mesa.getId())
+                    .orElseThrow(() -> new OperacionNoPermitidaException("La mesa " + mesaPedido.getNumeroMesa()
+                            + " no está abierta: entre a la mesa e indique las personas antes de tomar el pedido.",
+                            CODIGO_MESA_SIN_ATENCION));
         }
 
         if (request.getItems() == null || request.getItems().isEmpty()) {
@@ -176,6 +192,7 @@ public class PedidoService {
         pedido.setClaveIdempotencia(request.getClaveIdempotencia());
         pedido.setCanal(canal);
         pedido.setMesa(mesa);
+        pedido.setAtencion(atencion);
         pedido.setUsuario(mozo);
         pedido.setClienteNombre(request.getClienteNombre());
         pedido.setClienteTelefono(request.getClienteTelefono());
@@ -329,6 +346,14 @@ public class PedidoService {
             return null;
         }
         return modificadores.trim();
+    }
+
+    // Pedidos de una atención de mesa en orden de envío (HU044 Escenario 4)
+    @Transactional(readOnly = true)
+    public List<PedidoResponse> pedidosDeAtencion(Long atencionId) {
+        return pedidoRepository.findByAtencionIdOrderByCreatedAtAsc(atencionId).stream()
+                .map(this::convertirADto)
+                .collect(Collectors.toList());
     }
 
     private PedidoResponse convertirADto(Pedido pedido) {

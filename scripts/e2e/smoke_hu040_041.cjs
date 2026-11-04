@@ -81,11 +81,13 @@ async function despacharItem(item, expedidor) {
     const mesasZona = async () => (await zonasMozo()).find((z) => z.id === zonaId)?.mesas ?? [];
     check('HU041 Esc.4 la mesa desactivada no aparece a los mozos', d4.status === 200 && !(await mesasZona()).some((m) => m.id === m2.id), String(d4.status));
     const enInactiva = await http('POST', '/pedidos', mozo, { canalId: salon.id, mesaId: m2.id, items: [{ platoId: plato.id, cantidad: 1 }] });
-    check('HU041 Esc.4 el servidor rechaza pedidos en la mesa desactivada (400)', enInactiva.status === 400, `${enInactiva.status} ${enInactiva.data?.mensaje}`);
+    check('HU041 Esc.4 el servidor rechaza pedidos en la mesa desactivada (409 MESA_NO_DISPONIBLE)', enInactiva.status === 409 && enInactiva.data.codigo === 'MESA_NO_DISPONIBLE', `${enInactiva.status} ${enInactiva.data?.mensaje}`);
     await http('PATCH', `/mesas/${m2.id}/estado`, A, { activo: true });
     check('HU041 Esc.6 la mesa reactivada vuelve a aparecer', (await mesasZona()).some((m) => m.id === m2.id));
 
     // --- Mesa en atención: pedido de salón activo en P1
+    // HU044: el pedido de salón exige abrir antes la mesa (atención)
+    await http('POST', `/mesas/${m1.id}/atencion`, mozo, { personas: 2 });
     const pedido = await http('POST', '/pedidos', mozo, { canalId: salon.id, mesaId: m1.id, items: [{ platoId: plato.id, cantidad: 1 }] });
     check('Pedido de salón en la mesa P1 (201)', pedido.status === 201, String(pedido.status));
 
@@ -98,6 +100,8 @@ async function despacharItem(item, expedidor) {
     check('HU041 Esc.5 mesa en atención no se mueve ni desactiva (409)', mover.status === 409 && desact.status === 409, `${mover.status}/${desact.status}`);
 
     await despacharItem(pedido.data.items[0], expedidor);
+    // HU046: con todo despachado el mozo libera la mesa y deja de estar en atención
+    await http('POST', `/mesas/${m1.id}/atencion/liberar`, mozo);
     const z4 = await http('PATCH', `/zonas/${zonaId}/estado`, A, { activo: false });
     check('HU040 Esc.4 la zona sin atención se desactiva', z4.status === 200 && z4.data.activo === false, String(z4.status));
     check('HU040 Esc.4 los mozos dejan de ver la zona', !(await zonasMozo()).some((z) => z.id === zonaId));

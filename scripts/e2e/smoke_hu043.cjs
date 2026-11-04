@@ -73,19 +73,22 @@ async function despacharItem(item, expedidor) {
     const mesaAjena = salon.mesas.find((m) => m.activo);
     const ajena = await http('POST', '/pedidos', T, { canalId: canalSalon.id, mesaId: mesaAjena.id, items: [{ platoId: plato.id, cantidad: 1 }] });
     check('HU043 Esc.3 pedido en mesa de otra zona rechazado (403)', ajena.status === 403, `${ajena.status} ${ajena.data?.mensaje}`);
-    const propia = await http('POST', '/pedidos', T, { canalId: canalSalon.id, mesaId: susMesas[0].id, items: [{ platoId: plato.id, cantidad: 1 }] });
+    // HU044: se abre una mesa libre de su zona antes de tomar el pedido
+    const mesaPropia = susMesas.find((m) => !m.enAtencion) ?? susMesas[0];
+    await http('POST', `/mesas/${mesaPropia.id}/atencion`, T, { personas: 2 });
+    const propia = await http('POST', '/pedidos', T, { canalId: canalSalon.id, mesaId: mesaPropia.id, items: [{ platoId: plato.id, cantidad: 1 }] });
     check('HU043 Esc.3 pedido en una mesa de su zona (201)', propia.status === 201, `${propia.status} ${propia.data?.mensaje}`);
 
     // --- Escenario 5: quitar la zona
     await http('PUT', `/mozos/${mozo.id}/zonas`, A, { zonaIds: [] });
     check('HU043 Esc.5 al quitarle la zona deja de verla', (await http('GET', '/zonas', T)).data.length === 0 && (await http('GET', '/mesas', T)).data.length === 0);
     const pedidoDespues = (await http('GET', `/pedidos/${propia.data.id}`, A)).data;
-    check('HU043 Esc.5 el pedido ya enviado no se altera', pedidoDespues.estado === 'ENVIADO' && pedidoDespues.mesaId === susMesas[0].id, pedidoDespues.estado);
+    check('HU043 Esc.5 el pedido ya enviado no se altera', pedidoDespues.estado === 'ENVIADO' && pedidoDespues.mesaId === mesaPropia.id, pedidoDespues.estado);
 
     // --- Escenario 4: sin zonas toma pedidos para llevar o delivery, no de salón
     const delivery = await http('POST', '/pedidos', T, { canalId: 3, items: [{ platoId: plato.id, cantidad: 1 }] });
     check('HU043 Esc.4 sin zonas registra un pedido sin mesa (201)', delivery.status === 201, String(delivery.status));
-    const salonSinZonas = await http('POST', '/pedidos', T, { canalId: canalSalon.id, mesaId: susMesas[0].id, items: [{ platoId: plato.id, cantidad: 1 }] });
+    const salonSinZonas = await http('POST', '/pedidos', T, { canalId: canalSalon.id, mesaId: mesaPropia.id, items: [{ platoId: plato.id, cantidad: 1 }] });
     check('HU043 Esc.4 sin zonas no registra pedidos de salón (403)', salonSinZonas.status === 403, String(salonSinZonas.status));
 
     check('HU043 no se asignan zonas inactivas (400)', await (async () => {
@@ -113,6 +116,9 @@ async function despacharItem(item, expedidor) {
 
     // Limpieza: libera la mesa usada y deja al mozo de prueba inactivo (tiene historial)
     await despacharItem(propia.data.items[0], expedidor);
+    // Liberar exige tener la zona de la mesa (HU046): se le devuelve Terraza para cerrar la atención
+    await http('PUT', `/mozos/${mozo.id}/zonas`, A, { zonaIds: [terraza.id] });
+    await http('POST', `/mesas/${mesaPropia.id}/atencion/liberar`, T);
     await http('PATCH', `/mozos/${mozo.id}/estado`, A, { activo: false });
   } catch (e) {
     check('Ejecución sin excepciones', false, e.message);

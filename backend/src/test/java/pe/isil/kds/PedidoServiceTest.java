@@ -50,6 +50,9 @@ class PedidoServiceTest {
     private UsuarioRepository usuarioRepository;
 
     @Mock
+    private AtencionMesaRepository atencionRepository;
+
+    @Mock
     private TrazabilidadService trazabilidadService;
 
     @Mock
@@ -93,6 +96,12 @@ class PedidoServiceTest {
         mozo.setApellido("Valencia");
         // HU043: la mesa 08 está en una zona que el mozo atiende
         mozo.getZonas().add(mesa08.getZona());
+        // HU044: la mesa 08 está abierta; lenient porque los casos rechazados antes no llegan a consultarla
+        AtencionMesa atencion08 = new AtencionMesa();
+        atencion08.setId(80L);
+        atencion08.setMesa(mesa08);
+        atencion08.setPersonas(2);
+        lenient().when(atencionRepository.findByMesaIdAndLiberadaEnIsNull(8L)).thenReturn(Optional.of(atencion08));
 
         estacion = new Estacion();
         estacion.setId(1L);
@@ -173,12 +182,13 @@ class PedidoServiceTest {
         when(mesaRepository.bloquearPorId(8L)).thenReturn(Optional.of(mesa08));
 
         mesa08.setActivo(false);
-        IllegalArgumentException porMesa = assertThrows(IllegalArgumentException.class, () -> pedidoService.crearComanda(req, "angie"));
+        OperacionNoPermitidaException porMesa = assertThrows(OperacionNoPermitidaException.class, () -> pedidoService.crearComanda(req, "angie"));
         assertTrue(porMesa.getMessage().contains("no está disponible"));
+        assertEquals(PedidoService.CODIGO_MESA_NO_DISPONIBLE, porMesa.getCodigo());
 
         mesa08.setActivo(true);
         mesa08.getZona().setActivo(false);
-        assertThrows(IllegalArgumentException.class, () -> pedidoService.crearComanda(req, "angie"));
+        assertThrows(OperacionNoPermitidaException.class, () -> pedidoService.crearComanda(req, "angie"));
         verify(pedidoRepository, never()).saveAndFlush(any());
     }
 
@@ -223,6 +233,24 @@ class PedidoServiceTest {
         assertEquals(1L, pedidoService.obtenerPorId(1L, "angie", true).getId());
         assertThrows(pe.isil.kds.exception.RecursoNoEncontradoException.class, () -> pedidoService.obtenerPorId(2L, "angie", true));
         assertEquals(2L, pedidoService.obtenerPorId(2L, "admin", false).getId());
+    }
+
+    @Test
+    @DisplayName("HU044 / D19: Un pedido de salón en una mesa que no fue abierta se rechaza (409 MESA_SIN_ATENCION)")
+    void crearComanda_MesaSinAtencion_EsRechazada() {
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(1L);
+        req.setMesaId(8L);
+        req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
+        when(canalRepository.findById(1L)).thenReturn(Optional.of(canalSalon));
+        when(mesaRepository.bloquearPorId(8L)).thenReturn(Optional.of(mesa08));
+        when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
+        when(atencionRepository.findByMesaIdAndLiberadaEnIsNull(8L)).thenReturn(Optional.empty());
+
+        OperacionNoPermitidaException ex = assertThrows(OperacionNoPermitidaException.class,
+                () -> pedidoService.crearComanda(req, "angie"));
+        assertEquals(PedidoService.CODIGO_MESA_SIN_ATENCION, ex.getCodigo());
+        verify(pedidoRepository, never()).saveAndFlush(any());
     }
 
     @Test

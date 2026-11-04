@@ -1,6 +1,7 @@
-// Pantalla de Comandero de Sala para La Retama KDS (HU006, HU007, HU008, HU009, HU010 & HU023)
+// Pantalla de Comandero de Sala para La Retama KDS (HU006, HU007, HU008, HU009, HU010, HU023, HU044 & HU046)
 // Basada en Stitch (02 - Comandero y Toma de Pedidos / Culinary Operations Light):
-// - Subheader con selector de Canal de Venta (HU037) y Zonas/Mesas (HU005)
+// - Antes de la carta el mozo elige el destino: canal y, en Salón, zona → mesa → personas (HU044)
+// - Subheader con el destino elegido, "Cambiar" (confirma si hay comanda sin enviar) y "Liberar mesa" (HU046)
 // - Búsqueda rápida con respuesta instantánea (< 500 ms) y categorías (HU007)
 // - Tarjetas de platos con tiempo estándar de cocina (HU023) y precio en S/
 // - Split View: Catálogo a la izquierda (65%) e Inspector de Comanda a la derecha (35%)
@@ -10,18 +11,19 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
+import { type Destino, SeleccionDestino } from '../components/comandero/SeleccionDestino';
 import { LaRetamaWatermark } from '../components/common/LaRetamaWatermark';
 import { TopAppBar } from '../components/common/TopAppBar';
 import { useToast } from '../context/ToastContext';
 import type {
+  AtencionMesa,
   CanalVenta,
   CategoriaPlato,
   ItemComanda,
-  Mesa,
   PedidoResponse,
   Plato,
-  Zona,
 } from '../types';
+import { ESTILO_ESTADO } from '../utils/cocina';
 
 // Límites de HU008, alineados con las validaciones de ItemPedidoRequest en el backend
 const CANTIDAD_MAXIMA = 50;
@@ -66,11 +68,10 @@ export const ComanderoPage: React.FC = () => {
   const { showToast } = useToast();
 
   // Estado operativo de la comanda en armado
-  const [canalSeleccionado, setCanalSeleccionado] = useState<number | null>(null);
-  // Se activa si el canal elegido fue desactivado: obliga a elegir otro en vez de cambiarlo en silencio
-  const [canalRequiereSeleccion, setCanalRequiereSeleccion] = useState<boolean>(false);
-  const [mesaSeleccionada, setMesaSeleccionada] = useState<number | ''>('');
-  const [zonaActiva, setZonaActiva] = useState<number | null>(null);
+  // HU044: canal y, en Salón, la atención de la mesa elegida antes de ver la carta
+  const [destino, setDestino] = useState<Destino | null>(null);
+  const [confirmar, setConfirmar] = useState<'cambiar' | 'liberar' | null>(null);
+  const [liberando, setLiberando] = useState<boolean>(false);
   const [categoriaActiva, setCategoriaActiva] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState<string>('');
   const [observacionesGenerales, setObservacionesGenerales] = useState<string>('');
@@ -94,53 +95,66 @@ export const ComanderoPage: React.FC = () => {
     queryFn: async () => (await apiClient.get('/canales')).data,
   });
 
-  // HU010: el canal de la comanda sale del tipo elegido por el mozo; por defecto Salón
-  const canalActual = canalRequiereSeleccion
-    ? undefined
-    : canalSeleccionado !== null
-      ? canales.find((c) => c.id === canalSeleccionado)
-      : (canales.find((c) => c.codigo === 'SALON') ?? canales[0]);
-  const esSalon = canalActual?.codigo === 'SALON';
+  const queryClient = useQueryClient();
 
-  // HU010 Escenario 4: si el canal elegido fue desactivado, avisar y exigir una nueva selección
+  const canalActual = destino?.canal;
+  const esSalon = canalActual?.codigo === 'SALON';
+  const atencion = destino?.atencion ?? null;
+
+  // HU010 Escenario 4: si el canal elegido fue desactivado, se vuelve a elegir el destino
   useEffect(() => {
-    if (canalSeleccionado === null || canales.length === 0) return;
-    if (!canales.some((c) => c.id === canalSeleccionado)) {
-      setCanalSeleccionado(null);
-      setCanalRequiereSeleccion(true);
+    if (!destino || canales.length === 0) return;
+    if (!canales.some((c) => c.id === destino.canal.id)) {
+      setDestino(null);
       showToast(
         'El canal elegido fue desactivado. Seleccione otro canal para la comanda.',
         'warning',
       );
     }
-  }, [canales, canalSeleccionado, showToast]);
+  }, [canales, destino, showToast]);
 
-  const handleSeleccionarCanal = (canalId: number) => {
-    if (envioSinConfirmar) return;
-    setCanalSeleccionado(canalId);
-    setCanalRequiereSeleccion(false);
+  const recargarAtencion = async (actual: AtencionMesa) => {
+    try {
+      const res = await apiClient.get<AtencionMesa>(`/mesas/${actual.mesaId}/atencion`);
+      setDestino((prev) => (prev ? { ...prev, atencion: res.data } : prev));
+    } catch (err: any) {
+      // Solo si la mesa ya no está abierta (404) o se le quitó al mozo (403) se vuelve a elegir;
+      // un corte de red no debe sacar al mozo de la mesa
+      const status: number | undefined = err.response?.status;
+      if (status === 404 || status === 403) setDestino(null);
+    }
   };
 
-  const queryClient = useQueryClient();
-
-  // HU043: el servidor solo entrega al mozo sus zonas asignadas y las mesas de ellas
-  const { data: zonas = [], isSuccess: zonasCargadas } = useQuery<Zona[]>({
-    queryKey: ['zonas'],
-    queryFn: async () => (await apiClient.get('/zonas')).data,
-  });
-  const sinZonasAsignadas = zonasCargadas && zonas.length === 0;
-
-  const { data: mesas = [], isSuccess: mesasCargadas } = useQuery<Mesa[]>({
-    queryKey: ['mesas'],
-    queryFn: async () => (await apiClient.get('/mesas')).data,
-  });
-
-  // Una mesa que ya no está entre las del mozo (zona quitada o desactivada) no puede quedar elegida
-  useEffect(() => {
-    if (mesaSeleccionada !== '' && mesasCargadas && !mesas.some((m) => m.id === mesaSeleccionada)) {
-      setMesaSeleccionada('');
+  // HU044 Escenario 6: cambiar de destino con platos sin enviar pide confirmar el descarte
+  const handleCambiarDestino = () => {
+    if (envioSinConfirmar) return;
+    if (itemsComanda.length > 0) {
+      setConfirmar('cambiar');
+      return;
     }
-  }, [mesas, mesasCargadas, mesaSeleccionada]);
+    setDestino(null);
+  };
+
+  // HU046: liberar la mesa cuando el cliente se retira; el servidor exige que todo esté despachado
+  const handleLiberarMesa = async () => {
+    if (!atencion) return;
+    setLiberando(true);
+    try {
+      await apiClient.post(`/mesas/${atencion.mesaId}/atencion/liberar`);
+      showToast(`Mesa ${atencion.mesaNumero} liberada.`, 'success');
+      setConfirmar(null);
+      handleLimpiarComanda();
+      setAcuse(null);
+      setDestino(null);
+      queryClient.invalidateQueries({ queryKey: ['zonas'] });
+    } catch (err: any) {
+      showToast(err.response?.data?.mensaje || 'No se pudo liberar la mesa.', 'warning');
+      setConfirmar(null);
+      recargarAtencion(atencion);
+    } finally {
+      setLiberando(false);
+    }
+  };
 
   const { data: categorias = [] } = useQuery<CategoriaPlato[]>({
     queryKey: ['categorias'],
@@ -171,12 +185,6 @@ export const ComanderoPage: React.FC = () => {
   useEffect(() => {
     refrescarCorrelativo();
   }, []);
-
-  // Filtrado de mesas por zona activa
-  const mesasFiltradas = useMemo(() => {
-    if (!zonaActiva) return mesas;
-    return mesas.filter((m) => m.zonaId === zonaActiva);
-  }, [mesas, zonaActiva]);
 
   // Búsqueda y filtrado reactivo de platos en memoria (< 100 ms) (HU007)
   const platosFiltrados = useMemo(() => {
@@ -312,8 +320,8 @@ export const ComanderoPage: React.FC = () => {
       return;
     }
 
-    if (esSalon && !mesaSeleccionada) {
-      showToast('Seleccione una mesa obligatoriamente para pedidos de Salón.', 'warning');
+    if (esSalon && !atencion) {
+      showToast('Elija una mesa antes de enviar un pedido de Salón.', 'warning');
       return;
     }
 
@@ -336,7 +344,7 @@ export const ComanderoPage: React.FC = () => {
         claveIdempotencia: clave,
         canalId: canalActual.id,
         // La mesa solo aplica a consumo en Salón; Para llevar y Delivery no la arrastran
-        mesaId: esSalon ? mesaSeleccionada || null : null,
+        mesaId: esSalon ? (atencion?.mesaId ?? null) : null,
         observaciones: observacionesGenerales.trim() || undefined,
         items: itemsComanda.map((item) => ({
           platoId: item.plato.id,
@@ -356,6 +364,8 @@ export const ComanderoPage: React.FC = () => {
       );
       handleLimpiarComanda();
       refrescarCorrelativo();
+      // HU044 Escenario 4: la comanda nueva aparece entre los pedidos de la mesa
+      if (atencion) recargarAtencion(atencion);
     } catch (err: any) {
       const status: number | undefined = err.response?.status;
       if (!status || status >= 500) {
@@ -378,10 +388,14 @@ export const ComanderoPage: React.FC = () => {
         refetchCanales();
         refetchPlatos();
       }
-      if (err.response?.status === 400 || err.response?.status === 403) {
-        // HU040/HU043: la mesa pudo desactivarse o su zona quitársele al mozo; se recargan para soltarla
-        queryClient.invalidateQueries({ queryKey: ['mesas'] });
+      const codigo: string | undefined = err.response?.data?.codigo;
+      const mesaPerdida =
+        status === 403 || codigo === 'MESA_SIN_ATENCION' || codigo === 'MESA_NO_DISPONIBLE';
+      if (esSalon && mesaPerdida) {
+        // HU040/HU043/HU044: la mesa se desactivó, se liberó o su zona se le quitó al mozo;
+        // se vuelve a elegir la mesa conservando los platos armados
         queryClient.invalidateQueries({ queryKey: ['zonas'] });
+        setDestino(null);
       }
     } finally {
       enviandoRef.current = false;
@@ -389,101 +403,71 @@ export const ComanderoPage: React.FC = () => {
     }
   };
 
+  if (!destino) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
+        <TopAppBar />
+        <SeleccionDestino
+          canales={canales}
+          onElegir={(d) => {
+            setAcuse(null);
+            setDestino(d);
+          }}
+        />
+        <LaRetamaWatermark />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
       <TopAppBar />
 
-      {/* Subheader Operativo: Selección de Canal, Mesas y Barra de Búsqueda */}
+      {/* Subheader Operativo: destino elegido (HU044) y Barra de Búsqueda */}
       <section className="bg-surface-container-lowest border-b border-surface-container-high px-4 lg:px-6 py-3 shadow-xs">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          {/* Canales de Venta (HU037) */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
-              <span className="material-symbols-outlined text-[16px]">local_shipping</span>
-              Canal:
+          {/* Destino de la comanda (HU044): canal y, en Salón, la mesa abierta */}
+          <div data-destino className="flex items-center gap-3 flex-wrap">
+            <span className="material-symbols-outlined text-[24px] text-primary">
+              {esSalon ? 'table_restaurant' : 'takeout_dining'}
             </span>
-            <div className="flex items-center gap-1 bg-surface-container-low p-1 rounded-lg border border-surface-container-high">
-              {canales.map((canal) => {
-                const activo = canal.id === canalActual?.id;
-                return (
-                  <button
-                    key={canal.id}
-                    type="button"
-                    onClick={() => handleSeleccionarCanal(canal.id)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
-                      activo
-                        ? 'bg-primary text-on-primary shadow-xs'
-                        : 'text-on-surface-variant hover:text-on-surface'
-                    }`}
-                  >
-                    {canal.nombre}
-                    <span className="ml-1 opacity-70 text-[10px]">
-                      ({canal.slaObjetivoMinutos}m)
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Selección de Mesas y Zonas (HU005) - visible si es Salón */}
-          {esSalon && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
-                <span className="material-symbols-outlined text-[16px]">table_restaurant</span>
-                Mesa:
-              </span>
-              {/* Filtro rápido por zona física */}
-              <div className="hidden sm:flex items-center gap-1 bg-surface-container-low p-0.5 rounded-lg border border-surface-container-high">
-                <button
-                  type="button"
-                  onClick={() => setZonaActiva(null)}
-                  className={`px-2 py-1 rounded text-[11px] font-bold transition-all ${
-                    zonaActiva === null
-                      ? 'bg-primary text-on-primary'
-                      : 'text-on-surface-variant hover:text-on-surface'
-                  }`}
-                >
-                  Todas
-                </button>
-                {zonas.map((z) => (
-                  <button
-                    key={z.id}
-                    type="button"
-                    onClick={() => setZonaActiva(z.id)}
-                    className={`px-2 py-1 rounded text-[11px] font-bold transition-all ${
-                      zonaActiva === z.id
-                        ? 'bg-primary text-on-primary'
-                        : 'text-on-surface-variant hover:text-on-surface'
-                    }`}
-                  >
-                    {z.nombre}
-                  </button>
-                ))}
-              </div>
-              {sinZonasAsignadas && (
-                <span
-                  data-sin-zonas
-                  className="text-[11px] font-bold text-tertiary bg-tertiary/10 border border-tertiary/30 px-2 py-1 rounded-lg"
-                >
-                  Sin zonas asignadas: solo puede tomar pedidos para llevar o delivery
-                </span>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                {canalActual?.nombre}
+              </p>
+              <p className="font-headline font-extrabold text-base leading-tight">
+                {atencion
+                  ? `Mesa ${atencion.mesaNumero} · ${atencion.zonaNombre}`
+                  : 'Pedido sin mesa'}
+              </p>
+              {atencion && (
+                <p className="text-[11px] font-semibold text-on-surface-variant">
+                  {atencion.personas} {atencion.personas === 1 ? 'persona' : 'personas'} · abrió{' '}
+                  {atencion.mozoNombre}
+                </p>
               )}
-              <select
-                value={mesaSeleccionada}
-                disabled={envioSinConfirmar || sinZonasAsignadas}
-                onChange={(e) => setMesaSeleccionada(e.target.value ? Number(e.target.value) : '')}
-                className="bg-surface-container-low border border-surface-container-high text-on-surface text-xs font-bold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-primary focus:outline-none"
-              >
-                <option value="">-- Seleccionar Mesa --</option>
-                {mesasFiltradas.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    Mesa {m.numeroMesa} ({m.zonaNombre}) • Cap. {m.capacidad}
-                  </option>
-                ))}
-              </select>
             </div>
-          )}
+            <button
+              type="button"
+              data-cambiar-destino
+              onClick={handleCambiarDestino}
+              disabled={envioSinConfirmar}
+              className="px-3 py-1.5 rounded-lg border border-surface-container-high text-xs font-bold text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low disabled:opacity-40"
+            >
+              {esSalon ? 'Cambiar mesa' : 'Cambiar'}
+            </button>
+            {atencion && (
+              <button
+                type="button"
+                data-liberar-mesa
+                onClick={() => setConfirmar('liberar')}
+                disabled={envioSinConfirmar || liberando}
+                className="px-3 py-1.5 rounded-lg border border-secondary/40 text-xs font-bold text-secondary hover:bg-secondary/10 disabled:opacity-40"
+              >
+                Liberar mesa
+              </button>
+            )}
+          </div>
 
           {/* Barra de Búsqueda Rápida (< 500 ms) (HU007) */}
           <div className="relative flex-1 min-w-[240px] max-w-md">
@@ -637,7 +621,7 @@ export const ComanderoPage: React.FC = () => {
               </div>
               <p className="text-[11px] font-medium text-on-surface-variant mt-0.5">
                 {canalActual?.nombre ?? 'Sin canal'} •{' '}
-                {esSalon && mesaSeleccionada ? `Mesa 0${mesaSeleccionada}` : 'Sin mesa'}
+                {atencion ? `Mesa ${atencion.mesaNumero}` : 'Sin mesa'}
               </p>
             </div>
 
@@ -654,6 +638,47 @@ export const ComanderoPage: React.FC = () => {
               </button>
             )}
           </div>
+
+          {/* HU044 Escenario 4: pedidos ya realizados en la mesa */}
+          {atencion && atencion.pedidos.length > 0 && (
+            <details
+              data-pedidos-mesa
+              className="mx-3.5 mt-3 rounded-xl border border-surface-container-high bg-surface-container-low/60 px-3 py-2 text-left flex-shrink-0"
+            >
+              <summary className="text-xs font-extrabold cursor-pointer">
+                Pedidos en esta mesa ({atencion.pedidos.length})
+                {atencion.itemsPendientes > 0 && (
+                  <span className="ml-1 font-semibold text-tertiary">
+                    · {atencion.itemsPendientes} por despachar
+                  </span>
+                )}
+              </summary>
+              <ul className="mt-2 flex flex-col gap-1.5 max-h-40 overflow-y-auto">
+                {atencion.pedidos.map((p) => (
+                  <li key={p.id} className="text-[11px]">
+                    <span className="font-mono font-bold text-primary">{p.codigoCorrelativo}</span>
+                    <span className="text-on-surface-variant">
+                      {' '}
+                      · {horaLocal(p.fechaEnvioCocina)}
+                    </span>
+                    <ul className="pl-3">
+                      {p.items.map((i) => (
+                        <li key={i.id} className="flex justify-between gap-2">
+                          <span>
+                            {i.cantidad}× {i.platoNombre}
+                          </span>
+                          <span className="font-semibold text-on-surface-variant">
+                            {ESTILO_ESTADO[i.estadoItem as keyof typeof ESTILO_ESTADO]?.etiqueta ??
+                              i.estadoItem}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
 
           {/* HU009 Esc. 1: acuse de recibo del último envío confirmado por el servidor */}
           {acuse && (
@@ -880,6 +905,56 @@ export const ComanderoPage: React.FC = () => {
           </div>
         </aside>
       </main>
+
+      {confirmar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-surface/40 backdrop-blur-xs">
+          <div
+            role="dialog"
+            aria-label={confirmar === 'cambiar' ? 'Descartar comanda' : 'Liberar mesa'}
+            className="bg-surface-container-lowest w-full max-w-sm rounded-2xl shadow-2xl border border-surface-container-high p-6 flex flex-col gap-4"
+          >
+            <h2 className="font-headline font-bold text-lg">
+              {confirmar === 'cambiar'
+                ? '¿Descartar la comanda?'
+                : `¿Liberar la mesa ${atencion?.mesaNumero}?`}
+            </h2>
+            <p className="text-sm text-on-surface-variant">
+              {confirmar === 'cambiar'
+                ? `Tiene ${itemsComanda.length} ${itemsComanda.length === 1 ? 'plato' : 'platos'} sin enviar. Si cambia de destino se descartan.`
+                : `Hágalo cuando el cliente se haya retirado. La mesa quedará libre para la siguiente atención.${
+                    itemsComanda.length > 0
+                      ? ` Se descartarán ${itemsComanda.length} ${itemsComanda.length === 1 ? 'plato' : 'platos'} sin enviar.`
+                      : ''
+                  }`}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmar(null)}
+                className="px-4 py-2 rounded-lg text-xs font-bold text-on-surface-variant hover:bg-surface-container-low"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={liberando}
+                onClick={() => {
+                  if (confirmar === 'cambiar') {
+                    handleLimpiarComanda();
+                    setConfirmar(null);
+                    setDestino(null);
+                  } else {
+                    handleLiberarMesa();
+                  }
+                }}
+                className="px-4 py-2 rounded-lg bg-primary text-on-primary text-xs font-bold disabled:opacity-50"
+              >
+                {confirmar === 'cambiar' ? 'DESCARTAR Y CAMBIAR' : 'LIBERAR MESA'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <LaRetamaWatermark />
     </div>
