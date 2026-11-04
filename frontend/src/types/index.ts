@@ -38,6 +38,8 @@ export interface Mesa {
   numeroMesa: string;
   capacidad: number;
   activo: boolean;
+  // HU040/HU041: con atención en curso no se desactiva ni se mueve de zona
+  enAtencion?: boolean;
 }
 
 export interface Zona {

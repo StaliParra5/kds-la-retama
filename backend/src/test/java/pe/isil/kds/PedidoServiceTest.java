@@ -77,9 +77,14 @@ class PedidoServiceTest {
         canalDelivery.setCodigo("DELIVERY");
         canalDelivery.setNombre("Delivery");
 
+        Zona salonPrincipal = new Zona();
+        salonPrincipal.setId(1L);
+        salonPrincipal.setNombre("Salón Principal");
+
         mesa08 = new Mesa();
         mesa08.setId(8L);
         mesa08.setNumeroMesa("08");
+        mesa08.setZona(salonPrincipal);
 
         mozo = new Usuario();
         mozo.setId(10L);
@@ -124,7 +129,7 @@ class PedidoServiceTest {
         req.setItems(List.of(new ItemPedidoRequest(50L, 2, "Sin cebolla")));
 
         when(canalRepository.findById(1L)).thenReturn(Optional.of(canalSalon));
-        when(mesaRepository.findById(8L)).thenReturn(Optional.of(mesa08));
+        when(mesaRepository.bloquearPorId(8L)).thenReturn(Optional.of(mesa08));
         when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
         when(platoRepository.findById(50L)).thenReturn(Optional.of(plato));
         when(pedidoRepository.obtenerSiguienteValorSecuencia()).thenReturn(5L);
@@ -156,6 +161,26 @@ class PedidoServiceTest {
     }
 
     @Test
+    @DisplayName("HU040 Escenario 4 / HU041 Escenario 4: No se registran pedidos en una mesa inactiva o de una zona inactiva")
+    void crearComanda_MesaOZonaInactiva_EsRechazada() {
+        CrearPedidoRequest req = new CrearPedidoRequest();
+        req.setCanalId(1L);
+        req.setMesaId(8L);
+        req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
+        when(canalRepository.findById(1L)).thenReturn(Optional.of(canalSalon));
+        when(mesaRepository.bloquearPorId(8L)).thenReturn(Optional.of(mesa08));
+
+        mesa08.setActivo(false);
+        IllegalArgumentException porMesa = assertThrows(IllegalArgumentException.class, () -> pedidoService.crearComanda(req, "angie"));
+        assertTrue(porMesa.getMessage().contains("no está disponible"));
+
+        mesa08.setActivo(true);
+        mesa08.getZona().setActivo(false);
+        assertThrows(IllegalArgumentException.class, () -> pedidoService.crearComanda(req, "angie"));
+        verify(pedidoRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     @DisplayName("HU006: Fallback de correlativo al conteo del día si la secuencia nativa no está disponible")
     void crearComanda_FallbackSecuencia_Exitoso() {
         CrearPedidoRequest req = new CrearPedidoRequest();
@@ -164,7 +189,7 @@ class PedidoServiceTest {
         req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
 
         when(canalRepository.findById(1L)).thenReturn(Optional.of(canalSalon));
-        when(mesaRepository.findById(8L)).thenReturn(Optional.of(mesa08));
+        when(mesaRepository.bloquearPorId(8L)).thenReturn(Optional.of(mesa08));
         when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
         when(platoRepository.findById(50L)).thenReturn(Optional.of(plato));
         when(pedidoRepository.obtenerSiguienteValorSecuencia()).thenThrow(new RuntimeException("DB sequence unreachable"));
@@ -277,7 +302,7 @@ class PedidoServiceTest {
         req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
 
         when(canalRepository.findById(1L)).thenReturn(Optional.of(canalSalon));
-        when(mesaRepository.findById(8L)).thenReturn(Optional.of(mesa08));
+        when(mesaRepository.bloquearPorId(8L)).thenReturn(Optional.of(mesa08));
         when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
         when(platoRepository.findById(50L)).thenReturn(Optional.of(plato));
 
@@ -375,7 +400,7 @@ class PedidoServiceTest {
         req.setItems(List.of(new ItemPedidoRequest(50L, 1, null)));
 
         when(canalRepository.findById(1L)).thenReturn(Optional.of(canalSalon));
-        when(mesaRepository.findById(8L)).thenReturn(Optional.of(mesa08));
+        when(mesaRepository.bloquearPorId(8L)).thenReturn(Optional.of(mesa08));
         when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
         when(platoRepository.findById(50L)).thenReturn(Optional.of(plato));
 
@@ -461,7 +486,7 @@ class PedidoServiceTest {
 
     private void prepararAperturaValida() {
         when(canalRepository.findById(1L)).thenReturn(Optional.of(canalSalon));
-        when(mesaRepository.findById(8L)).thenReturn(Optional.of(mesa08));
+        when(mesaRepository.bloquearPorId(8L)).thenReturn(Optional.of(mesa08));
         when(usuarioRepository.findByUsername("angie")).thenReturn(Optional.of(mozo));
         when(platoRepository.findById(anyLong())).thenReturn(Optional.of(plato));
         when(pedidoRepository.obtenerSiguienteValorSecuencia()).thenReturn(1L);

@@ -1,5 +1,6 @@
 package pe.isil.kds.dto;
 
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -19,6 +20,7 @@ public class CrearMesaRequest {
 
     @NotNull(message = "La capacidad de comensales es obligatoria")
     @Min(value = 1, message = "La capacidad mínima de una mesa debe ser de al menos 1 comensal")
+    @Max(value = 20, message = "La capacidad máxima de una mesa es de 20 comensales")
     private Integer capacidad;
 
     public CrearMesaRequest() {}

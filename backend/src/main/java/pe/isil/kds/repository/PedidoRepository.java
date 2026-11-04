@@ -25,6 +25,12 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
     List<Pedido> findByEstado(EstadoPedido estado);
     List<Pedido> findByEstadoInOrderByCreatedAtAsc(List<EstadoPedido> estados);
 
+    // Mesas con algún pedido en los estados indicados (mesas en atención, HU040/HU041)
+    @Query("SELECT DISTINCT p.mesa.id FROM Pedido p WHERE p.mesa IS NOT NULL AND p.estado IN :estados")
+    List<Long> idsMesasConPedidoEn(@Param("estados") List<EstadoPedido> estados);
+
+    boolean existsByMesaIdAndEstadoIn(Long mesaId, List<EstadoPedido> estados);
+
     @Query("SELECT COUNT(p) FROM Pedido p WHERE p.createdAt >= :desde")
     long countPedidosDesde(LocalDateTime desde);
 

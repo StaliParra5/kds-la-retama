@@ -143,8 +143,12 @@ public class PedidoService {
             if (request.getMesaId() == null) {
                 throw new IllegalArgumentException("Para pedidos de Salón es obligatorio seleccionar una mesa.");
             }
-            mesa = mesaRepository.findById(request.getMesaId())
+            // Bloquea la mesa: si el admin la desactiva al mismo tiempo, uno de los dos espera al otro (HU040/HU041)
+            mesa = mesaRepository.bloquearPorId(request.getMesaId())
                     .orElseThrow(() -> new IllegalArgumentException("Mesa no encontrada con ID: " + request.getMesaId()));
+            if (!Boolean.TRUE.equals(mesa.getActivo()) || !Boolean.TRUE.equals(mesa.getZona().getActivo())) {
+                throw new IllegalArgumentException("La mesa " + mesa.getNumeroMesa() + " no está disponible: fue desactivada o su zona está inactiva.");
+            }
         } else if (request.getMesaId() != null) {
             mesa = mesaRepository.findById(request.getMesaId()).orElse(null);
         }

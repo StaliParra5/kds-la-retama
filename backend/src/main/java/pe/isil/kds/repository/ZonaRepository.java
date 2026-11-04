@@ -8,6 +8,7 @@ import java.util.Optional;
 
 @Repository
 public interface ZonaRepository extends JpaRepository<Zona, Long> {
-    Optional<Zona> findByNombre(String nombre);
     List<Zona> findByActivoTrue();
+    List<Zona> findAllByOrderByIdAsc();
+    Optional<Zona> findByNombreIgnoreCase(String nombre);
 }

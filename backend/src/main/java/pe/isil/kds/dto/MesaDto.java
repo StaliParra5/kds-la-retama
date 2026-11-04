@@ -8,6 +8,8 @@ public class MesaDto {
     private String numeroMesa;
     private Integer capacidad;
     private Boolean activo;
+    // HU040/HU041: la mesa tiene una atención en curso y no puede desactivarse ni moverse
+    private boolean enAtencion;
 
     public MesaDto() {}
 
@@ -37,4 +39,7 @@ public class MesaDto {
 
     public Boolean getActivo() { return activo; }
     public void setActivo(Boolean activo) { this.activo = activo; }
+
+    public boolean isEnAtencion() { return enAtencion; }
+    public void setEnAtencion(boolean enAtencion) { this.enAtencion = enAtencion; }
 }

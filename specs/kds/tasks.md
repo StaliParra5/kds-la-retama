@@ -308,3 +308,10 @@
   - `POST /api/v1/pedidos` exige el rol Mozo (`@PreAuthorize("hasRole('MOZO')")`): cocina, pase y administración reciben 403.
   - El enlace "Comandero" solo aparece al mozo; la ruta `/comandero` usa `ProtectedRoute` con `exclusiva`, que tampoco deja pasar al ADMIN, y devuelve a cada rol a su inicio.
   - Criterio de Aceptación: Escenarios 1 a 4 de HU039; `PedidoControllerTest`; smoke `smoke_hu039.cjs` 14/14 (`smoke_hu009.sh` ahora comprueba el 403 del admin).
+
+- [x] **TASK-060 [FULL] [B2] Administrar zonas y editar mesas (HU040, HU041, D17)**
+  - API Admin: `GET /zonas/todas` (zonas y mesas, incluidas inactivas, con `enAtencion`), `POST`/`PUT /zonas`, `PATCH /zonas/{id}/estado`, `PUT /mesas/{id}`, `PATCH /mesas/{id}/estado`. Las zonas no se eliminan.
+  - Reglas: nombre de zona y número de mesa por zona únicos sin distinguir mayúsculas (validación + índices `lower()` en V10); una zona con mesas en atención no se desactiva (409 con las mesas); una mesa en atención no se mueve ni se desactiva, pero sí cambia número o capacidad; no se registran ni mueven mesas a zonas inactivas; capacidad entre 1 y 20. Hasta HU044, "en atención" = mesa con pedido sin terminar.
+  - El comandero (`GET /mesas`) solo recibe mesas activas de zonas activas y `POST /pedidos` rechaza mesas o zonas inactivas. Registrar un pedido y desactivar o mover su mesa se serializan con `SELECT ... FOR UPDATE` sobre la fila de la mesa.
+  - `AdminMesasPage`: nueva zona, ficha de la zona elegida (editar, desactivar, reactivar), mesas inactivas y en atención marcadas, edición de mesa al tocarla; el número de mesa admite letras (B1).
+  - Criterio de Aceptación: Escenarios 1 a 6 de HU040 y HU041; `MesaServiceTest` (19 casos), `PedidoServiceTest`; smoke `smoke_hu040_041.cjs` 28/28.
