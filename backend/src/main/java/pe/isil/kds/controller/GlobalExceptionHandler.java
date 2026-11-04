@@ -53,7 +53,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(OperacionNoPermitidaException.class)
     public ResponseEntity<Map<String, Object>> handleOperacionNoPermitida(OperacionNoPermitidaException ex) {
-        return buildResponse(HttpStatus.CONFLICT, "Operación no permitida", ex.getMessage());
+        ResponseEntity<Map<String, Object>> respuesta = buildResponse(HttpStatus.CONFLICT, "Operación no permitida", ex.getMessage());
+        if (ex.getCodigo() != null) {
+            respuesta.getBody().put("codigo", ex.getCodigo());
+        }
+        return respuesta;
     }
 
     @ExceptionHandler(EstadoDesactualizadoException.class)

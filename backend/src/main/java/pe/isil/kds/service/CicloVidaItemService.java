@@ -20,6 +20,7 @@ import pe.isil.kds.repository.UsuarioRepository;
 import pe.isil.kds.security.SesionKds;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -33,12 +34,15 @@ import java.util.Optional;
  *   estado vigente (Esc. 6). @Version cubre la carrera entre dos transacciones simultáneas.
  * - Roles (decisión D8): cocinero inicia y marca listo solo en su estación; expedidor y
  *   admin despachan. La anulación tiene su propio flujo con motivo (HU032).
+ * - Un ítem En espera cuya hora de disparo no llegó solo se inicia con confirmación (HU014 Esc. 3).
  * - El estado del pedido se recalcula a partir de sus ítems y cada cambio queda registrado.
  *   El pedido se bloquea (FOR UPDATE) para que cambios simultáneos en ítems distintos
  *   no deriven su estado a partir de una lectura desactualizada.
  */
 @Service
 public class CicloVidaItemService {
+
+    private static final DateTimeFormatter HORA = DateTimeFormatter.ofPattern("HH:mm");
 
     private final DetallePedidoRepository detalleRepository;
     private final PedidoRepository pedidoRepository;
@@ -85,12 +89,23 @@ public class CicloVidaItemService {
         if (!origen.puedeTransicionarA(destino)) {
             throw new OperacionNoPermitidaException("Transición no permitida: " + origen + " → " + destino + ".");
         }
+        // HU014 Esc. 3: adelantar un ítem retenido exige confirmación explícita del cocinero.
+        // Sin hora de disparo (retención manual) no hay nada que adelantar.
+        boolean anticipado = origen == EstadoItem.EN_ESPERA && item.getHoraDisparo() != null
+                && item.getHoraDisparo().isAfter(LocalDateTime.now());
+        if (anticipado && !request.isInicioAnticipado()) {
+            throw new OperacionNoPermitidaException("El ítem está en espera hasta las "
+                    + item.getHoraDisparo().format(HORA) + ". Confirme el inicio anticipado.",
+                    OperacionNoPermitidaException.INICIO_ANTICIPADO_REQUERIDO);
+        }
+        // El historial distingue el adelanto confirmado de un inicio normal
+        String motivo = anticipado ? "Inicio anticipado (disparo " + item.getHoraDisparo().format(HORA) + ")" : null;
 
         Usuario usuario = usuarioRepository.findByUsername(sesion.username()).orElse(null);
 
         item.setEstadoItem(destino);
         detalleRepository.saveAndFlush(item);
-        trazabilidadService.registrarItem(item, origen.name(), destino.name(), usuario, null);
+        trazabilidadService.registrarItem(item, origen.name(), destino.name(), usuario, motivo);
         Optional<NotificadorKds.PedidoKdsEvent> cambioPedido = actualizarEstadoPedido(item.getPedido(), usuario);
 
         // Orden fijo de notificación: primero el ítem que cambió y luego el pedido que derivó de él

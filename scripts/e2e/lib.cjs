@@ -47,13 +47,14 @@ function stompSuscriptor(destinos, token) {
   });
 }
 
-// Lleva a Listo todos los ítems pendientes de una estación (deja la pantalla en "Sin pedidos")
+// Lleva a Listo todos los ítems pendientes de una estación (deja la pantalla en "Sin pedidos").
+// Confirma el inicio anticipado para no quedar trabado en ítems retenidos de una prueba anterior.
 async function vaciarCola(estacionId, tokenCocinero) {
   const cola = (await http('GET', `/estaciones/${estacionId}/cola`, tokenCocinero)).data;
   for (const item of cola) {
     let estado = item.estado;
     for (const destino of ['EN_PREPARACION', 'LISTO']) {
-      const r = await http('PATCH', `/items/${item.id}/estado`, tokenCocinero, { estadoActual: estado, estadoDestino: destino });
+      const r = await http('PATCH', `/items/${item.id}/estado`, tokenCocinero, { estadoActual: estado, estadoDestino: destino, inicioAnticipado: true });
       if (r.status === 200) estado = destino;
     }
   }

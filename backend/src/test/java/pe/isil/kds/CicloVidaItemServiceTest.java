@@ -23,6 +23,7 @@ import pe.isil.kds.service.NotificadorKds;
 import pe.isil.kds.service.TrazabilidadService;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -206,6 +207,74 @@ class CicloVidaItemServiceTest {
 
         assertEquals(EstadoPedido.DESPACHADO, pedido.getEstado());
         assertNotNull(pedido.getFechaDespacho());
+    }
+
+    @Test
+    @DisplayName("HU014 Escenarios 1 y 2: Un toque inicia el ítem y otro lo marca Listo, sin pasos intermedios")
+    void unToque_IniciaYLuegoListo() {
+        when(detalleRepository.findById(10L)).thenReturn(Optional.of(lomo));
+
+        assertEquals("EN_PREPARACION", service.cambiarEstado(10L, req(EstadoItem.RECIBIDO, EstadoItem.EN_PREPARACION), cocineroPlancha).getEstado());
+        assertEquals("LISTO", service.cambiarEstado(10L, req(EstadoItem.EN_PREPARACION, EstadoItem.LISTO), cocineroPlancha).getEstado());
+        verify(detalleRepository, times(2)).saveAndFlush(lomo);
+    }
+
+    @Test
+    @DisplayName("HU014 Escenario 3: Un ítem En espera antes de su hora de disparo exige confirmar el inicio anticipado")
+    void enEspera_AntesDeLaHora_PideConfirmacion() {
+        lomo.setEstadoItem(EstadoItem.EN_ESPERA);
+        lomo.setHoraDisparo(LocalDateTime.now().plusMinutes(10));
+        when(detalleRepository.findById(10L)).thenReturn(Optional.of(lomo));
+
+        OperacionNoPermitidaException ex = assertThrows(OperacionNoPermitidaException.class, () ->
+                service.cambiarEstado(10L, req(EstadoItem.EN_ESPERA, EstadoItem.EN_PREPARACION), cocineroPlancha));
+        assertTrue(ex.getMessage().contains("inicio anticipado"));
+        assertEquals(OperacionNoPermitidaException.INICIO_ANTICIPADO_REQUERIDO, ex.getCodigo());
+        assertSinCambios();
+
+        CambiarEstadoItemRequest confirmado = req(EstadoItem.EN_ESPERA, EstadoItem.EN_PREPARACION);
+        confirmado.setInicioAnticipado(true);
+        assertEquals("EN_PREPARACION", service.cambiarEstado(10L, confirmado, cocineroPlancha).getEstado());
+        // El adelanto queda registrado como tal en el historial (HU022)
+        verify(trazabilidadService).registrarItem(eq(lomo), eq("EN_ESPERA"), eq("EN_PREPARACION"), any(),
+                startsWith("Inicio anticipado"));
+    }
+
+    @Test
+    @DisplayName("HU014 Escenario 3: Llegada la hora de disparo, el ítem En espera se inicia sin confirmación")
+    void enEspera_HoraCumplida_SinConfirmacion() {
+        lomo.setEstadoItem(EstadoItem.EN_ESPERA);
+        lomo.setHoraDisparo(LocalDateTime.now().minusMinutes(1));
+        when(detalleRepository.findById(10L)).thenReturn(Optional.of(lomo));
+
+        assertEquals("EN_PREPARACION", service.cambiarEstado(10L, req(EstadoItem.EN_ESPERA, EstadoItem.EN_PREPARACION), cocineroPlancha).getEstado());
+    }
+
+    @Test
+    @DisplayName("HU014 Escenario 4: El cocinero no cambia un ítem Listo; el despacho se confirma desde el pase")
+    void listo_CocineroNoLoCambia() {
+        lomo.setEstadoItem(EstadoItem.LISTO);
+        when(detalleRepository.findById(10L)).thenReturn(Optional.of(lomo));
+
+        assertThrows(AccessDeniedException.class, () ->
+                service.cambiarEstado(10L, req(EstadoItem.LISTO, EstadoItem.DESPACHADO), cocineroPlancha));
+        assertThrows(OperacionNoPermitidaException.class, () ->
+                service.cambiarEstado(10L, req(EstadoItem.LISTO, EstadoItem.EN_PREPARACION), cocineroPlancha));
+        assertEquals(EstadoItem.LISTO, lomo.getEstadoItem());
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("HU014 Escenario 6: Tocar un ítem que fue anulado informa la anulación y no cambia su estado")
+    void anuladoEnPantalla_InformaYNoCambia() {
+        lomo.setEstadoItem(EstadoItem.ANULADO); // anulado mientras la pantalla mostraba En preparación
+        when(detalleRepository.findById(10L)).thenReturn(Optional.of(lomo));
+
+        EstadoDesactualizadoException ex = assertThrows(EstadoDesactualizadoException.class, () ->
+                service.cambiarEstado(10L, req(EstadoItem.EN_PREPARACION, EstadoItem.LISTO), cocineroPlancha));
+
+        assertEquals("ANULADO", ex.getItemActual().getEstado());
+        assertSinCambios();
     }
 
     private void assertSinCambios() {

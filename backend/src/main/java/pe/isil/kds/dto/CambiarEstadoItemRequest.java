@@ -12,6 +12,9 @@ public class CambiarEstadoItemRequest {
     @NotNull(message = "El estado actual del ítem es obligatorio")
     private EstadoItem estadoActual;
 
+    // HU014 Esc. 3: el cocinero confirmó iniciar un ítem En espera antes de su hora de disparo
+    private boolean inicioAnticipado;
+
     public CambiarEstadoItemRequest() {}
 
     public CambiarEstadoItemRequest(EstadoItem estadoActual, EstadoItem estadoDestino) {
@@ -24,4 +27,7 @@ public class CambiarEstadoItemRequest {
 
     public EstadoItem getEstadoActual() { return estadoActual; }
     public void setEstadoActual(EstadoItem estadoActual) { this.estadoActual = estadoActual; }
+
+    public boolean isInicioAnticipado() { return inicioAnticipado; }
+    public void setInicioAnticipado(boolean inicioAnticipado) { this.inicioAnticipado = inicioAnticipado; }
 }
