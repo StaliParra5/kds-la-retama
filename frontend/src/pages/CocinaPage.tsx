@@ -265,18 +265,21 @@ export const CocinaPage: React.FC = () => {
               {cola.length} {cola.length === 1 ? 'ítem' : 'ítems'} · {grupos.length}{' '}
               {grupos.length === 1 ? 'pedido' : 'pedidos'}
             </span>
-            <span
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border ${
-                conectado
-                  ? 'bg-secondary/10 text-secondary border-secondary/30'
-                  : 'bg-error/10 text-error border-error/30'
-              }`}
-            >
+            {/* Sin estación no hay a qué conectarse: el indicador solo aparece con estación */}
+            {estacionId != null && (
               <span
-                className={`w-2 h-2 rounded-full ${conectado ? 'bg-secondary animate-pulse' : 'bg-error'}`}
-              />
-              {conectado ? 'En vivo' : rechazo ? 'Sin conexión' : 'Reconectando…'}
-            </span>
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border ${
+                  conectado
+                    ? 'bg-secondary/10 text-secondary border-secondary/30'
+                    : 'bg-error/10 text-error border-error/30'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${conectado ? 'bg-secondary animate-pulse' : 'bg-error'}`}
+                />
+                {conectado ? 'En vivo' : rechazo ? 'Sin conexión' : 'Reconectando…'}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -297,7 +300,9 @@ export const CocinaPage: React.FC = () => {
             </span>
             <p className="font-bold">Esta terminal no está vinculada a una estación</p>
             <p className="text-sm text-on-surface-variant mt-1 max-w-md">
-              Pida al administrador que la vincule en Estaciones y vuelva a ingresar con su PIN.
+              La vinculación se guarda en el navegador de esta PC. El administrador debe entrar en
+              este mismo navegador, ir a Estaciones › Vincular PC y luego usted vuelve a ingresar
+              con su PIN. Vincular desde otra PC u otro navegador no aplica a esta terminal.
             </p>
           </div>
         ) : isLoading ? (
