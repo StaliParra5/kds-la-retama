@@ -50,7 +50,9 @@ async function despacharItem(item, expedidor) {
     const zonas = (await http('GET', '/zonas/todas', A)).data;
     const terraza = zonas.find((z) => z.nombre === 'Terraza' && z.activo);
     const salon = zonas.find((z) => z.nombre === 'Salón Principal' && z.activo);
-    const barra = zonas.find((z) => z.nombre === 'Barra' && z.activo);
+    // Tercera zona con mesas: Barra, o la que siga activa si el admin la desactivó
+    const barra = zonas.find((z) => z.nombre === 'Barra' && z.activo)
+      ?? zonas.find((z) => z.activo && ![terraza.id, salon.id].includes(z.id) && (z.mesas ?? []).some((m) => m.activo));
 
     // --- Escenario 1: asignar zonas
     const mozo = await crearMozo(A, { username: `zona${sufijo}`, nombre: 'Zoila', apellido: 'Mesa' });
@@ -109,7 +111,7 @@ async function despacharItem(item, expedidor) {
     await pAdmin.waitForSelector(`[data-zona-check="${barra.id}"]`);
     await pAdmin.$eval(`[data-zona-check="${barra.id}"]`, (c) => c.click());
     await pAdmin.evaluate(() => Array.from(document.querySelectorAll('[role="dialog"] button')).find((b) => b.textContent.includes('GUARDAR ZONAS')).click());
-    check('UI HU043 Esc.1 la tarjeta muestra la zona asignada', await esperar(pAdmin, (u) => document.querySelector(`[data-mozo="${u}"] [data-zonas]`)?.innerText.includes('Barra'), mozo.username));
+    check('UI HU043 Esc.1 la tarjeta muestra la zona asignada', await esperar(pAdmin, ([u, zona]) => document.querySelector(`[data-mozo="${u}"] [data-zonas]`)?.innerText.includes(zona), [mozo.username, barra.nombre]));
     const mesasTrasUi = (await http('GET', '/mesas', T)).data;
     check('UI HU043 la asignación desde la pantalla llega al mozo', mesasTrasUi.length > 0 && mesasTrasUi.every((m) => m.zonaId === barra.id));
     check('Sin errores de JavaScript', errors.length === 0, errors.join(' | '));

@@ -132,8 +132,11 @@ export const SeleccionDestino: React.FC<Props> = ({ canales, onElegir }) => {
   const confirmarPersonas = (e: React.FormEvent) => {
     e.preventDefault();
     const n = Number.parseInt(personas, 10);
-    if (!mesaLibre || Number.isNaN(n) || n < 1 || n > 99) {
-      showToast('Indique una cantidad de personas entre 1 y 99.', 'warning');
+    if (!mesaLibre) return;
+    // Las personas no superan la capacidad de la mesa
+    const maximo = mesaLibre.capacidad;
+    if (Number.isNaN(n) || n < 1 || n > maximo) {
+      showToast(`La mesa ${mesaLibre.numeroMesa} admite entre 1 y ${maximo} personas.`, 'warning');
       return;
     }
     entrar.mutate({ mesa: mesaLibre, personas: n });
@@ -340,7 +343,7 @@ export const SeleccionDestino: React.FC<Props> = ({ canales, onElegir }) => {
               type="number"
               inputMode="numeric"
               min={1}
-              max={99}
+              max={mesaLibre.capacidad}
               required
               value={personas}
               onChange={(e) => setPersonas(e.target.value)}

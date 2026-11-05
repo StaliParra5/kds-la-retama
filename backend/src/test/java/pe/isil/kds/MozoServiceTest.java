@@ -13,6 +13,9 @@ import pe.isil.kds.exception.OperacionNoPermitidaException;
 import pe.isil.kds.exception.RecursoNoEncontradoException;
 import pe.isil.kds.model.Rol;
 import pe.isil.kds.model.Usuario;
+import pe.isil.kds.model.AtencionMesa;
+import pe.isil.kds.model.Mesa;
+import pe.isil.kds.repository.AtencionMesaRepository;
 import pe.isil.kds.repository.PedidoRepository;
 import pe.isil.kds.repository.RolRepository;
 import pe.isil.kds.repository.TransicionEstadoRepository;
@@ -47,6 +50,9 @@ class MozoServiceTest {
     @Mock
     private ZonaRepository zonaRepository;
 
+    @Mock
+    private AtencionMesaRepository atencionRepository;
+
     // Costo bajo: el test verifica la regla, no la fortaleza del hash
     private final PasswordEncoder encoder = new BCryptPasswordEncoder(4);
 
@@ -58,7 +64,8 @@ class MozoServiceTest {
 
     @BeforeEach
     void setUp() {
-        mozoService = new MozoService(usuarioRepository, rolRepository, pedidoRepository, transicionRepository, encoder, zonaRepository);
+        mozoService = new MozoService(usuarioRepository, rolRepository, pedidoRepository, transicionRepository, encoder, zonaRepository,
+                atencionRepository);
         rolMozo = rol(2L, "MOZO");
         angie = usuario(10L, "angie", rolMozo, "1234");
         cocinero = usuario(11L, "cocinero1", rol(3L, "COCINERO"), "5678");
@@ -189,6 +196,49 @@ class MozoServiceTest {
         mozoService.eliminar(10L);
 
         verify(usuarioRepository).delete(angie);
+    }
+
+    @Test
+    @DisplayName("HU042 Escenario 7: Un mozo que abrió mesas sin registrar pedidos se elimina junto con esas mesas vacías")
+    void eliminar_AtencionesSinPedidos() {
+        when(usuarioRepository.findById(10L)).thenReturn(Optional.of(angie));
+        when(pedidoRepository.existsEnAtencionesDelMozo(10L)).thenReturn(false);
+        when(atencionRepository.findByMozoIdAndLiberadaEnIsNull(10L)).thenReturn(List.of());
+
+        mozoService.eliminar(10L);
+
+        var orden = inOrder(atencionRepository, usuarioRepository);
+        orden.verify(atencionRepository).olvidarLiberacionesDelMozo(10L);
+        orden.verify(atencionRepository).eliminarLiberadasDelMozo(10L);
+        orden.verify(usuarioRepository).delete(angie);
+    }
+
+    @Test
+    @DisplayName("HU042 Escenario 8: Un mozo cuyas mesas tienen pedidos (de otro mozo) no se elimina")
+    void eliminar_PedidosEnSusMesas() {
+        when(usuarioRepository.findById(10L)).thenReturn(Optional.of(angie));
+        when(pedidoRepository.existsEnAtencionesDelMozo(10L)).thenReturn(true);
+
+        assertThrows(OperacionNoPermitidaException.class, () -> mozoService.eliminar(10L));
+        verify(atencionRepository, never()).eliminarLiberadasDelMozo(anyLong());
+        verify(usuarioRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("HU042: Un mozo con una mesa abierta no se elimina hasta liberarla")
+    void eliminar_MesaAbierta() {
+        Mesa mesa = new Mesa();
+        mesa.setNumeroMesa("07");
+        AtencionMesa abierta = new AtencionMesa();
+        abierta.setMesa(mesa);
+        abierta.setMozo(angie);
+        when(usuarioRepository.findById(10L)).thenReturn(Optional.of(angie));
+        when(atencionRepository.findByMozoIdAndLiberadaEnIsNull(10L)).thenReturn(List.of(abierta));
+
+        OperacionNoPermitidaException ex = assertThrows(OperacionNoPermitidaException.class, () -> mozoService.eliminar(10L));
+        assertTrue(ex.getMessage().contains("mesa 07"));
+        assertEquals(MozoService.CODIGO_MESA_ABIERTA, ex.getCodigo());
+        verify(usuarioRepository, never()).delete(any());
     }
 
     @Test

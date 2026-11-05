@@ -61,6 +61,7 @@ class AtencionServiceTest {
         mesa13.setId(13L);
         mesa13.setNumeroMesa("13");
         mesa13.setZona(terraza);
+        mesa13.setCapacidad(4);
         mozo = new Usuario();
         mozo.setId(10L);
         mozo.setUsername("angie");
@@ -121,6 +122,17 @@ class AtencionServiceTest {
         when(atencionRepository.findByMesaIdAndLiberadaEnIsNull(13L)).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class, () -> atencionService.entrar(13L, null, "angie"));
+        verify(atencionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("HU044 Escenario 3: Las personas no pueden superar la capacidad de la mesa")
+    void entrar_MesaLibre_SuperaCapacidad() {
+        mesaYMozo();
+        when(atencionRepository.findByMesaIdAndLiberadaEnIsNull(13L)).thenReturn(Optional.empty());
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> atencionService.entrar(13L, 5, "angie"));
+        assertTrue(ex.getMessage().contains("capacidad para 4"));
         verify(atencionRepository, never()).save(any());
     }
 

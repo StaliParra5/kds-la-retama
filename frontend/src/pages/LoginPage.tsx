@@ -134,7 +134,7 @@ export const LoginPage: React.FC = () => {
               La Retama <span className="text-primary">KDS</span>
             </h1>
             <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mt-1">
-              Sistema de Cocina y Salón • Sprint 1
+              Sistema de Cocina y Salón • Sprint 2
             </p>
           </div>
 

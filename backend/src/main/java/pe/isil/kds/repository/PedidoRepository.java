@@ -27,6 +27,11 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
 
     boolean existsByUsuarioId(Long usuarioId);
 
+    // HU042: pedidos (de cualquier mozo) en mesas que el mozo abrió o liberó
+    @Query("SELECT COUNT(p) > 0 FROM Pedido p JOIN p.atencion a LEFT JOIN a.liberadaPor lp "
+            + "WHERE a.mozo.id = :mozoId OR lp.id = :mozoId")
+    boolean existsEnAtencionesDelMozo(@Param("mozoId") Long mozoId);
+
     List<Pedido> findByAtencionIdOrderByCreatedAtAsc(Long atencionId);
 
     // Vista de salón (HU048): pedidos de varias atenciones con sus ítems en una sola consulta

@@ -23,7 +23,8 @@ import java.util.List;
  *
  * Reglas de Negocio:
  * - Entrar a una mesa libre abre su atención con la cantidad de personas; entrar a una en atención
- *   devuelve la existente sin volver a pedirlas (HU044 Escenarios 3 y 4).
+ *   devuelve la existente sin volver a pedirlas (HU044 Escenarios 3 y 4). Las personas no superan la
+ *   capacidad de la mesa.
  * - Abrir y liberar bloquean la fila de la mesa: dos aperturas simultáneas dejan una sola atención
  *   (Escenario 5) y un pedido no puede colarse en una mesa que se está liberando.
  * - Solo operan los mozos con la zona de la mesa asignada (HU043); el admin puede consultar.
@@ -61,6 +62,11 @@ public class AtencionService {
         }
         if (personas == null) {
             throw new IllegalArgumentException("La mesa " + mesa.getNumeroMesa() + " está libre: indique cuántas personas hay para abrirla.");
+        }
+        Integer capacidad = mesa.getCapacidad();
+        if (capacidad != null && personas > capacidad) {
+            throw new IllegalArgumentException("La mesa " + mesa.getNumeroMesa() + " tiene capacidad para " + capacidad
+                    + " personas: indique una cantidad entre 1 y " + capacidad + ".");
         }
         AtencionMesa atencion = new AtencionMesa();
         atencion.setMesa(mesa);

@@ -13,6 +13,21 @@ import { TopAppBar } from '../components/common/TopAppBar';
 import { useToast } from '../context/ToastContext';
 import type { CategoriaPlato, Estacion, Plato } from '../types';
 
+const PLATOS_POR_PAGINA = 10;
+
+// Primera, última y las vecinas de la actual; los saltos se marcan con null ("…")
+function paginasVisibles(actual: number, total: number): (number | null)[] {
+  const paginas: (number | null)[] = [];
+  for (let n = 1; n <= total; n++) {
+    if (n === 1 || n === total || Math.abs(n - actual) <= 1) {
+      paginas.push(n);
+    } else if (paginas[paginas.length - 1] !== null) {
+      paginas.push(null);
+    }
+  }
+  return paginas;
+}
+
 export const AdminProductosPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -106,6 +121,16 @@ export const AdminProductosPage: React.FC = () => {
       return matchEstacion && matchCategoria && matchBusqueda;
     });
   }, [platos, filtroEstacion, filtroCategoria, busqueda]);
+
+  // Paginación del listado filtrado: al cambiar un filtro se vuelve a la primera página
+  const claveFiltros = `${filtroEstacion}|${filtroCategoria}|${busqueda.trim()}`;
+  const [paginaEstado, setPaginaEstado] = useState({ clave: '', numero: 1 });
+  const totalPaginas = Math.max(1, Math.ceil(platosFiltrados.length / PLATOS_POR_PAGINA));
+  const pagina =
+    paginaEstado.clave === claveFiltros ? Math.min(paginaEstado.numero, totalPaginas) : 1;
+  const irAPagina = (numero: number) => setPaginaEstado({ clave: claveFiltros, numero });
+  const desde = (pagina - 1) * PLATOS_POR_PAGINA;
+  const platosPagina = platosFiltrados.slice(desde, desde + PLATOS_POR_PAGINA);
 
   const handleAbrirNuevo = () => {
     setPlatoEditando(null);
@@ -367,7 +392,7 @@ export const AdminProductosPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-container-high">
-                  {platosFiltrados.map((plato) => (
+                  {platosPagina.map((plato) => (
                     <tr
                       key={plato.id}
                       className="hover:bg-surface-container-low/50 transition-colors"
@@ -430,6 +455,54 @@ export const AdminProductosPage: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-surface-container-high text-xs">
+                <span className="text-on-surface-variant font-medium" data-paginacion-resumen>
+                  Mostrando {desde + 1}–{desde + platosPagina.length} de {platosFiltrados.length}{' '}
+                  platos
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => irAPagina(pagina - 1)}
+                    disabled={pagina === 1}
+                    aria-label="Página anterior"
+                    className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+                  </button>
+                  {paginasVisibles(pagina, totalPaginas).map((n, i) =>
+                    n === null ? (
+                      <span key={`salto-${i}`} className="px-1 text-on-surface-variant">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={n}
+                        type="button"
+                        data-pagina={n}
+                        onClick={() => irAPagina(n)}
+                        aria-current={n === pagina ? 'page' : undefined}
+                        className={`min-w-8 px-2 py-1.5 rounded-lg font-bold transition-colors cursor-pointer ${
+                          n === pagina
+                            ? 'bg-primary text-on-primary'
+                            : 'text-on-surface-variant hover:bg-surface-container'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ),
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => irAPagina(pagina + 1)}
+                    disabled={pagina === totalPaginas}
+                    aria-label="Página siguiente"
+                    className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

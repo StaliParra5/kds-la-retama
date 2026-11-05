@@ -8,9 +8,11 @@ import pe.isil.kds.dto.MozoDto;
 import pe.isil.kds.dto.ZonaAsignadaDto;
 import pe.isil.kds.exception.OperacionNoPermitidaException;
 import pe.isil.kds.exception.RecursoNoEncontradoException;
+import pe.isil.kds.model.AtencionMesa;
 import pe.isil.kds.model.Rol;
 import pe.isil.kds.model.Usuario;
 import pe.isil.kds.model.Zona;
+import pe.isil.kds.repository.AtencionMesaRepository;
 import pe.isil.kds.repository.PedidoRepository;
 import pe.isil.kds.repository.RolRepository;
 import pe.isil.kds.repository.TransicionEstadoRepository;
@@ -32,12 +34,15 @@ import java.util.stream.Collectors;
  * - El PIN es de 4 dígitos y no puede coincidir con el de ningún otro usuario, activo o no (Escenario 3):
  *   el login por PIN rechaza los PIN compartidos, así que repetirlo dejaría a ambos sin poder entrar.
  *   El mensaje no revela a quién pertenece.
- * - Un mozo con pedidos o transiciones registradas no se elimina, se desactiva (Escenario 8, HU022).
+ * - Un mozo con pedidos o transiciones registradas, o cuyas mesas atendidas tienen pedidos, no se elimina,
+ *   se desactiva (Escenario 8, HU022). Tampoco si tiene una mesa abierta. Las mesas que abrió y liberó sin
+ *   pedidos se borran con él (Escenario 7).
  */
 @Service
 public class MozoService {
 
     public static final String CODIGO_CON_HISTORIAL = "MOZO_CON_HISTORIAL";
+    public static final String CODIGO_MESA_ABIERTA = "MOZO_CON_MESA_ABIERTA";
     private static final String ROL_MOZO = "MOZO";
     private static final String MENSAJE_PIN_EN_USO = "Ese PIN ya está en uso por otro usuario. Asigne un PIN diferente.";
 
@@ -47,16 +52,19 @@ public class MozoService {
     private final TransicionEstadoRepository transicionRepository;
     private final PasswordEncoder passwordEncoder;
     private final ZonaRepository zonaRepository;
+    private final AtencionMesaRepository atencionRepository;
 
     public MozoService(UsuarioRepository usuarioRepository, RolRepository rolRepository,
                        PedidoRepository pedidoRepository, TransicionEstadoRepository transicionRepository,
-                       PasswordEncoder passwordEncoder, ZonaRepository zonaRepository) {
+                       PasswordEncoder passwordEncoder, ZonaRepository zonaRepository,
+                       AtencionMesaRepository atencionRepository) {
         this.usuarioRepository = usuarioRepository;
         this.rolRepository = rolRepository;
         this.pedidoRepository = pedidoRepository;
         this.transicionRepository = transicionRepository;
         this.passwordEncoder = passwordEncoder;
         this.zonaRepository = zonaRepository;
+        this.atencionRepository = atencionRepository;
     }
 
     @Transactional(readOnly = true)
@@ -128,16 +136,24 @@ public class MozoService {
         Usuario mozo = buscarMozo(id);
         if (tieneHistorial(id)) {
             throw new OperacionNoPermitidaException("El mozo " + mozo.getNombreCompleto()
-                    + " tiene pedidos registrados: no se puede eliminar para conservar la trazabilidad. Puede desactivarlo.",
-                    CODIGO_CON_HISTORIAL);
+                    + " tiene pedidos registrados o atendió mesas con pedidos: no se puede eliminar para conservar la trazabilidad."
+                    + " Puede desactivarlo.", CODIGO_CON_HISTORIAL);
+        }
+        List<AtencionMesa> abiertas = atencionRepository.findByMozoIdAndLiberadaEnIsNull(id);
+        if (!abiertas.isEmpty()) {
+            throw new OperacionNoPermitidaException("El mozo " + mozo.getNombreCompleto() + " tiene abierta la mesa "
+                    + abiertas.get(0).getMesa().getNumeroMesa() + ": libérela antes de eliminarlo.", CODIGO_MESA_ABIERTA);
         }
         try {
+            // Mesas que abrió y liberó sin llegar a registrar pedidos: no aportan trazabilidad
+            atencionRepository.olvidarLiberacionesDelMozo(id);
+            atencionRepository.eliminarLiberadasDelMozo(id);
             usuarioRepository.delete(mozo);
             usuarioRepository.flush();
         } catch (DataIntegrityViolationException e) {
-            // Un pedido registrado entre la comprobación y el borrado: mismo trato que el Escenario 8
+            // Un registro creado entre la comprobación y el borrado: mismo trato que el Escenario 8
             throw new OperacionNoPermitidaException("El mozo " + mozo.getNombreCompleto()
-                    + " acaba de registrar pedidos: no se puede eliminar. Puede desactivarlo.", CODIGO_CON_HISTORIAL);
+                    + " acaba de registrar actividad: no se puede eliminar. Puede desactivarlo.", CODIGO_CON_HISTORIAL);
         }
     }
 
@@ -198,7 +214,8 @@ public class MozoService {
     }
 
     private boolean tieneHistorial(Long usuarioId) {
-        return pedidoRepository.existsByUsuarioId(usuarioId) || transicionRepository.existsByUsuarioId(usuarioId);
+        return pedidoRepository.existsByUsuarioId(usuarioId) || transicionRepository.existsByUsuarioId(usuarioId)
+                || pedidoRepository.existsEnAtencionesDelMozo(usuarioId);
     }
 
     private Usuario buscarMozo(Long id) {

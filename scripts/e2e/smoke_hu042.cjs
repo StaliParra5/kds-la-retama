@@ -97,6 +97,20 @@ async function pinLibre(token, mozoId) {
     const lista = (await http('GET', '/mozos', A)).data;
     check('HU042 Esc.7 el mozo sin pedidos se elimina (204)', del.status === 204 && !lista.some((m) => m.id === lucia.id), String(del.status));
 
+    // --- Escenario 7: abrir una mesa sin registrar pedidos no impide eliminarlo (antes daba 409)
+    const marta = await crearMozo(A, { username: `marta${sufijo}`, nombre: 'Marta', apellido: 'Quispe' });
+    const mesaLibre = (await http('GET', '/mesas', A)).data.find((m) => m.activo && !m.enAtencion);
+    await http('PUT', `/mozos/${marta.id}/zonas`, A, { zonaIds: [mesaLibre.zonaId] });
+    const tokenMarta = (await loginPin({ username: marta.username, pin: marta.pin })).data.token;
+    const abre = await http('POST', `/mesas/${mesaLibre.id}/atencion`, tokenMarta, { personas: 1 });
+    check('El mozo nuevo abre una mesa sin enviar pedidos', abre.status === 200, String(abre.status));
+    const delAbierta = await http('DELETE', `/mozos/${marta.id}`, A);
+    check('HU042 con una mesa abierta no se elimina e indica cuál (409)', delAbierta.status === 409 && delAbierta.data.mensaje.includes(`mesa ${mesaLibre.numeroMesa}`), `${delAbierta.status} ${delAbierta.data?.mensaje}`);
+    const libera = await http('POST', `/mesas/${mesaLibre.id}/atencion/liberar`, tokenMarta);
+    check('El mozo libera la mesa vacía', libera.status === 200, String(libera.status));
+    const delMarta = await http('DELETE', `/mozos/${marta.id}`, A);
+    check('HU042 Esc.7 el mozo que solo abrió y liberó una mesa sin pedidos se elimina (204)', delMarta.status === 204, `${delMarta.status} ${delMarta.data?.mensaje}`);
+
     // --- Escenario 8: con pedidos no se elimina
     const pedro = await crearMozo(A, { username: `pedro${sufijo}`, nombre: 'Pedro', apellido: 'Ríos' });
     const tokenPedro = (await loginPin({ username: pedro.username, pin: pedro.pin })).data.token;

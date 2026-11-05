@@ -349,3 +349,9 @@
   - `AdminSalonPage` en `/admin/salon` (enlace "Salón"): grilla por zona con leyenda de umbrales, filtro por zona, en vivo por `/topic/pedidos` y `/topic/items` más recarga cada 4 s (aperturas y liberaciones); detalle lateral de solo lectura con mozos, personas, tiempos y pedidos con el estado de cada ítem; diálogo "Semáforo".
   - Pruebas de humo: helper `cerrarMesa` en `lib.cjs` para dejar las mesas libres al terminar, también si la prueba falla.
   - Criterio de Aceptación: Escenarios 1 a 4 de HU047 y 1 a 6 de HU048; `SalonServiceTest`; smoke `smoke_hu047_048.cjs` 26/26.
+
+- [x] **TASK-066 [FULL] [F2] Ajustes tras la revisión del Bloque 3 (HU042, HU003, HU044)**
+  - HU042: un mozo que abrió mesas sin registrar pedidos ya se puede eliminar (la FK de `atenciones_mesa` daba un 409 engañoso). Se borran las mesas que abrió y liberó sin pedidos y se olvida quién liberó mesas de otros. Cuenta como historial cualquier pedido en mesas que abrió o liberó. Con una mesa abierta responde 409 `MOZO_CON_MESA_ABIERTA` e indica cuál liberar.
+  - HU003: el catálogo de platos del admin se pagina de 10 en 10 (primera, última y vecinas de la actual), y vuelve a la primera página al cambiar un filtro.
+  - HU044: las personas al abrir una mesa no superan su capacidad (servidor y comandero).
+  - Criterio de Aceptación: `MozoServiceTest` y `AtencionServiceTest` (162 tests en verde); smokes `smoke_hu042.cjs`, `smoke_hu044_046.cjs` y el nuevo `smoke_hu003_paginacion.cjs`; las 17 suites en verde.

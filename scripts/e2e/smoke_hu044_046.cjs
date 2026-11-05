@@ -53,7 +53,9 @@ async function despachar(item, expedidor) {
     const sufijo = String(Date.now()).slice(-6);
     const zonas = (await http('GET', '/zonas/todas', A)).data;
     const terraza = zonas.find((z) => z.nombre === 'Terraza' && z.activo);
-    const barra = zonas.find((z) => z.nombre === 'Barra' && z.activo);
+    // Otra zona para el segundo mozo: Barra, o la que siga activa si el admin la desactivó
+    const barra = zonas.find((z) => z.nombre === 'Barra' && z.activo)
+      ?? zonas.find((z) => z.activo && z.id !== terraza.id && z.nombre !== 'Salón Principal' && (z.mesas ?? []).some((m) => m.activo));
 
     const mozo = await crearMozo(A, { username: `mesa${sufijo}`, nombre: 'Marco', apellido: 'Salas' });
     mozosDePrueba.push(mozo.id);
@@ -79,6 +81,8 @@ async function despachar(item, expedidor) {
     const sinPersonas = await http('POST', `/mesas/${mesaA.id}/atencion`, T, {});
     check('HU044 Esc.3 una mesa libre no se abre sin personas (400)', sinPersonas.status === 400, `${sinPersonas.status} ${sinPersonas.data?.mensaje}`);
     check('HU044 Esc.3 personas debe ser mayor que cero (400)', (await http('POST', `/mesas/${mesaA.id}/atencion`, T, { personas: 0 })).status === 400);
+    const excede = await http('POST', `/mesas/${mesaA.id}/atencion`, T, { personas: mesaA.capacidad + 1 });
+    check('HU044 Esc.3 las personas no superan la capacidad de la mesa (400)', excede.status === 400 && excede.data.mensaje.includes(`capacidad para ${mesaA.capacidad}`), `${excede.status} ${excede.data?.mensaje}`);
     const abierta = await http('POST', `/mesas/${mesaA.id}/atencion`, T, { personas: 3 });
     abiertas.push(mesaA.id);
     check('HU044 Esc.3 se abre la mesa con 3 personas', abierta.status === 200 && abierta.data.personas === 3 && abierta.data.mozoNombre === 'Marco Salas', `${abierta.status}`);
