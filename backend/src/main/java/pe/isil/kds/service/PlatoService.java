@@ -1,5 +1,6 @@
 package pe.isil.kds.service;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.isil.kds.dto.GuardarPlatoRequest;
@@ -20,6 +21,9 @@ import java.util.stream.Collectors;
  * Reglas de Negocio Implementadas:
  * - tiempoEstandarMinutos > 0 y estacion obligatoria en cada plato para permitir la secuenciación de cocina.
  * - Búsqueda textual insensible a mayúsculas optimizada para responder en menos de 500 ms (requisito < 3 s).
+ * - Agotado no es dado de baja: el plato sigue en el catálogo marcado como agotado (HU030 Escenario 5).
+ * - Todo cambio de la carta se avisa por /topic/platos tras el commit para que el comandero la recargue
+ *   en menos de 5 segundos (HU030 Escenarios 1 y 2).
  */
 @Service
 public class PlatoService {
@@ -27,14 +31,17 @@ public class PlatoService {
     private final PlatoRepository platoRepository;
     private final CategoriaPlatoRepository categoriaRepository;
     private final EstacionRepository estacionRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PlatoService(
             PlatoRepository platoRepository,
             CategoriaPlatoRepository categoriaRepository,
-            EstacionRepository estacionRepository) {
+            EstacionRepository estacionRepository,
+            ApplicationEventPublisher eventPublisher) {
         this.platoRepository = platoRepository;
         this.categoriaRepository = categoriaRepository;
         this.estacionRepository = estacionRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -82,6 +89,7 @@ public class PlatoService {
         plato.setActivo(true);
 
         Plato guardado = platoRepository.save(plato);
+        avisarCambio(guardado);
         return convertirADto(guardado);
     }
 
@@ -109,6 +117,7 @@ public class PlatoService {
         }
 
         Plato actualizado = platoRepository.save(plato);
+        avisarCambio(actualizado);
         return convertirADto(actualizado);
     }
 
@@ -117,7 +126,14 @@ public class PlatoService {
         Plato plato = platoRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Plato no encontrado con ID: " + id));
         plato.setDisponible(disponible);
-        return convertirADto(platoRepository.save(plato));
+        Plato guardado = platoRepository.save(plato);
+        avisarCambio(guardado);
+        return convertirADto(guardado);
+    }
+
+    private void avisarCambio(Plato plato) {
+        eventPublisher.publishEvent(new NotificadorKds.PlatoKdsEvent(
+                plato.getId(), plato.getNombre(), Boolean.TRUE.equals(plato.getDisponible())));
     }
 
     @Transactional(readOnly = true)

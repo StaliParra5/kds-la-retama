@@ -37,6 +37,8 @@ class PermisosSuscripcionTest {
     @DisplayName("HU012: El mozo solo escucha pedidos; destinos desconocidos o mal formados se rechazan")
     void mozoYDestinosInvalidos() {
         assertTrue(PermisosSuscripcion.puedeSuscribirse(mozo, "/topic/pedidos"));
+        // HU030: cualquier usuario autenticado escucha los cambios de la carta
+        assertTrue(PermisosSuscripcion.puedeSuscribirse(mozo, "/topic/platos"));
         assertFalse(PermisosSuscripcion.puedeSuscribirse(mozo, "/topic/estacion/2"));
         assertFalse(PermisosSuscripcion.puedeSuscribirse(admin, "/topic/estacion/2/extra"));
         assertFalse(PermisosSuscripcion.puedeSuscribirse(admin, "/topic/estacion/abc"));

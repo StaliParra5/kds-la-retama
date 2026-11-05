@@ -11,6 +11,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
+import { useRecargaAgrupada, useTiempoReal } from '../api/tiempoReal';
 import { type Destino, SeleccionDestino } from '../components/comandero/SeleccionDestino';
 import { LaRetamaWatermark } from '../components/common/LaRetamaWatermark';
 import { TopAppBar } from '../components/common/TopAppBar';
@@ -170,6 +171,19 @@ export const ComanderoPage: React.FC = () => {
     queryFn: async () => (await apiClient.get('/platos')).data,
   });
 
+  // HU030: un plato agotado o reactivado llega por /topic/platos y la carta se recarga al instante
+  const recargarPlatos = useRecargaAgrupada(['platos']);
+  // La primera conexión llega justo tras la carga inicial; solo las reconexiones recargan lo perdido
+  const yaConectado = useRef(false);
+  useTiempoReal({
+    destinos: ['/topic/platos'],
+    alMensaje: recargarPlatos,
+    alConectar: () => {
+      if (yaConectado.current) recargarPlatos();
+      yaConectado.current = true;
+    },
+  });
+
   // Consultar correlativo diario sugerido (HU006)
   const refrescarCorrelativo = async () => {
     try {
@@ -303,6 +317,24 @@ export const ComanderoPage: React.FC = () => {
     }
   };
 
+  // HU030 Escenario 3: líneas cuyo plato se agotó (o salió de la carta) después de agregarse
+  const lineasAgotadas = useMemo(() => {
+    if (cargandoPlatos) return new Set<string>();
+    const disponibles = new Set(platos.filter((p) => p.disponible).map((p) => p.id));
+    return new Set(itemsComanda.filter((i) => !disponibles.has(i.plato.id)).map((i) => i.lineaId));
+  }, [cargandoPlatos, platos, itemsComanda]);
+
+  // Avisa una sola vez por cada plato que se agota estando en la comanda
+  const agotadosAvisados = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    const agotados = itemsComanda.filter((i) => lineasAgotadas.has(i.lineaId)).map((i) => i.plato);
+    const nuevos = agotados.filter((p) => !agotadosAvisados.current.has(p.id));
+    agotadosAvisados.current = new Set(agotados.map((p) => p.id));
+    for (const plato of nuevos) {
+      showToast(`${plato.nombre} se agotó: retírelo de la comanda antes de enviar.`, 'warning');
+    }
+  }, [lineasAgotadas, itemsComanda, showToast]);
+
   // Cálculo de totales y tiempo estimado
   const totalComanda = useMemo(() => {
     return itemsComanda.reduce((acc, item) => acc + item.plato.precio * item.cantidad, 0);
@@ -327,6 +359,13 @@ export const ComanderoPage: React.FC = () => {
 
     if (itemsComanda.length === 0) {
       showToast('Agregue al menos un plato a la comanda antes de enviarla.', 'warning');
+      return;
+    }
+
+    // HU030 Escenario 3: un envío nuevo no sale con platos agotados. El reintento de un envío sin
+    // confirmar sí: si el primero llegó, el servidor devuelve ese pedido sin volver a validarlo.
+    if (!envioSinConfirmar && lineasAgotadas.size > 0) {
+      showToast('Retire los platos agotados de la comanda antes de enviarla.', 'warning');
       return;
     }
 
@@ -583,6 +622,7 @@ export const ComanderoPage: React.FC = () => {
                 return (
                   <div
                     key={plato.id}
+                    data-plato={plato.id}
                     className="bg-surface-container-lowest border border-surface-container-high rounded-xl p-3.5 flex flex-col justify-between shadow-xs hover:border-primary/50 hover:shadow-md transition-all text-left relative overflow-hidden group"
                   >
                     {/* Indicador de cantidad en carrito si ya fue agregado */}
@@ -790,12 +830,22 @@ export const ComanderoPage: React.FC = () => {
                 itemsComanda.map((item) => (
                   <div
                     key={item.lineaId}
-                    className="bg-surface-container-low/70 border border-surface-container-high rounded-xl p-3 flex flex-col gap-2 shadow-2xs flex-shrink-0"
+                    data-linea-agotada={lineasAgotadas.has(item.lineaId) || undefined}
+                    className={`border rounded-xl p-3 flex flex-col gap-2 shadow-2xs flex-shrink-0 ${
+                      lineasAgotadas.has(item.lineaId)
+                        ? 'bg-error-container/40 border-error/40'
+                        : 'bg-surface-container-low/70 border-surface-container-high'
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="text-left flex-1">
                         <p className="text-xs font-bold text-on-surface leading-tight">
                           {item.plato.nombre}
+                          {lineasAgotadas.has(item.lineaId) && (
+                            <span className="ml-1.5 align-middle text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-error text-on-error">
+                              Agotado
+                            </span>
+                          )}
                         </p>
                         <span className="text-[10px] text-on-surface-variant font-medium">
                           S/ {item.plato.precio.toFixed(2)} c/u • {item.plato.tiempoEstandarMinutos}{' '}
@@ -913,11 +963,26 @@ export const ComanderoPage: React.FC = () => {
               </div>
             </div>
 
+            {lineasAgotadas.size > 0 && (
+              <p
+                data-aviso-agotados
+                className="text-[11px] font-semibold text-error bg-error-container/50 border border-error/30 rounded-lg px-3 py-2"
+              >
+                Retire {lineasAgotadas.size === 1 ? 'el plato agotado' : 'los platos agotados'} para
+                poder enviar la comanda.
+              </p>
+            )}
+
             {/* Botón Principal Táctil de Envío a Cocina */}
             <button
               type="button"
               onClick={handleEnviarComanda}
-              disabled={isSubmitting || itemsComanda.length === 0 || envioSinConfirmar}
+              disabled={
+                isSubmitting ||
+                itemsComanda.length === 0 ||
+                envioSinConfirmar ||
+                lineasAgotadas.size > 0
+              }
               className="w-full py-3.5 px-4 bg-primary hover:bg-primary-container active:scale-[0.98] text-on-primary rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-all disabled:opacity-50 cursor-pointer"
             >
               {isSubmitting ? (

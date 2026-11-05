@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import pe.isil.kds.dto.GuardarPlatoRequest;
 import pe.isil.kds.dto.PlatoDto;
 import pe.isil.kds.model.CategoriaPlato;
@@ -15,9 +16,11 @@ import pe.isil.kds.model.Plato;
 import pe.isil.kds.repository.CategoriaPlatoRepository;
 import pe.isil.kds.repository.EstacionRepository;
 import pe.isil.kds.repository.PlatoRepository;
+import pe.isil.kds.service.NotificadorKds;
 import pe.isil.kds.service.PlatoService;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -35,6 +38,9 @@ class PlatoServiceTest {
 
     @Mock
     private EstacionRepository estacionRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private PlatoService platoService;
@@ -86,6 +92,8 @@ class PlatoServiceTest {
         assertEquals("Lomo Saltado", resultado.getNombre());
         assertEquals(12, resultado.getTiempoEstandarMinutos());
         assertEquals("Plancha", resultado.getEstacionNombre());
+        // HU030: un plato nuevo aparece en los comanderos sin recargar
+        verify(eventPublisher).publishEvent(new NotificadorKds.PlatoKdsEvent(100L, "Lomo Saltado", true));
     }
 
     @Test
@@ -114,5 +122,74 @@ class PlatoServiceTest {
 
         assertThrows(IllegalArgumentException.class, () -> platoService.crearPlato(req));
         verify(platoRepository, never()).save(any());
+    }
+
+    private Plato lomo(boolean disponible) {
+        Plato p = new Plato();
+        p.setId(100L);
+        p.setNombre("Lomo Saltado");
+        p.setCategoria(categoria);
+        p.setEstacion(estacion);
+        p.setPrecio(new BigDecimal("32.00"));
+        p.setTiempoEstandarMinutos(12);
+        p.setDisponible(disponible);
+        p.setActivo(true);
+        return p;
+    }
+
+    @Test
+    @DisplayName("HU030 Escenario 1: Agotar un plato avisa a los comanderos por /topic/platos")
+    void cambiarDisponibilidad_Agotar_Avisa() {
+        Plato plato = lomo(true);
+        when(platoRepository.findById(100L)).thenReturn(Optional.of(plato));
+        when(platoRepository.save(any(Plato.class))).thenAnswer(i -> i.getArgument(0));
+
+        PlatoDto dto = platoService.cambiarDisponibilidad(100L, false);
+
+        assertFalse(dto.getDisponible());
+        verify(eventPublisher).publishEvent(new NotificadorKds.PlatoKdsEvent(100L, "Lomo Saltado", false));
+    }
+
+    @Test
+    @DisplayName("HU030 Escenario 2: Reactivar un plato agotado también se avisa")
+    void cambiarDisponibilidad_Reactivar_Avisa() {
+        Plato plato = lomo(false);
+        when(platoRepository.findById(100L)).thenReturn(Optional.of(plato));
+        when(platoRepository.save(any(Plato.class))).thenAnswer(i -> i.getArgument(0));
+
+        assertTrue(platoService.cambiarDisponibilidad(100L, true).getDisponible());
+        verify(eventPublisher).publishEvent(new NotificadorKds.PlatoKdsEvent(100L, "Lomo Saltado", true));
+    }
+
+    @Test
+    @DisplayName("HU030 Escenario 5: Un plato agotado sigue en el catálogo identificado como agotado")
+    void listar_IncluyeAgotados() {
+        when(platoRepository.findByActivoTrue()).thenReturn(List.of(lomo(false)));
+
+        List<PlatoDto> platos = platoService.listarPlatos(null, null);
+
+        assertEquals(1, platos.size());
+        assertFalse(platos.get(0).getDisponible());
+    }
+
+    @Test
+    @DisplayName("HU030: Agotar un plato desde el formulario de edición también se avisa")
+    void actualizarPlato_Avisa() {
+        Plato plato = lomo(true);
+        GuardarPlatoRequest req = new GuardarPlatoRequest();
+        req.setNombre("Lomo Saltado");
+        req.setCategoriaId(1L);
+        req.setEstacionId(2L);
+        req.setPrecio(new BigDecimal("32.00"));
+        req.setTiempoEstandarMinutos(12);
+        req.setDisponible(false);
+        when(platoRepository.findById(100L)).thenReturn(Optional.of(plato));
+        when(categoriaRepository.findById(1L)).thenReturn(Optional.of(categoria));
+        when(estacionRepository.findById(2L)).thenReturn(Optional.of(estacion));
+        when(platoRepository.save(any(Plato.class))).thenAnswer(i -> i.getArgument(0));
+
+        platoService.actualizarPlato(100L, req);
+
+        verify(eventPublisher).publishEvent(new NotificadorKds.PlatoKdsEvent(100L, "Lomo Saltado", false));
     }
 }

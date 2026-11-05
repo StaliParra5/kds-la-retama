@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
  * - /topic/estacion/{id}: el cocinero solo la de su estación; expedidor y admin, cualquiera.
  * - /topic/items: todos los ítems, solo para el pase (expedidor) y el admin.
  * - /topic/pedidos: cualquier usuario autenticado (comandero y monitores).
+ * - /topic/platos: cualquier usuario autenticado; cambios de la carta (HU030).
  * Cualquier otro destino se rechaza.
  */
 public final class PermisosSuscripcion {
@@ -32,7 +33,7 @@ public final class PermisosSuscripcion {
         }
         return switch (destino) {
             case "/topic/items" -> sesion.tieneRol("ADMIN", "EXPEDIDOR");
-            case "/topic/pedidos" -> true;
+            case "/topic/pedidos", "/topic/platos" -> true;
             default -> false;
         };
     }

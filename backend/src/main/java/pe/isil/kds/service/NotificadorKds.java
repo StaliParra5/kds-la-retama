@@ -18,6 +18,8 @@ import java.util.List;
  *   recibe únicamente sus ítems, ya con cantidad y modificadores.
  * - /topic/items: todos los ítems, para el pase y monitores generales.
  * - /topic/pedidos: altas y cambios de estado de pedidos (comandero y monitores).
+ * - /topic/platos: cambios de la carta, como un plato agotado o reactivado (HU030), para que el
+ *   comandero recargue la carta en menos de 5 segundos.
  */
 @Component
 public class NotificadorKds {
@@ -33,6 +35,8 @@ public class NotificadorKds {
     public record MensajeKds(TipoEvento tipo, ItemCocinaDto item) {}
 
     public record PedidoKdsEvent(TipoEventoPedido tipo, Long pedidoId, String codigoPedido, String estado) {}
+
+    public record PlatoKdsEvent(Long platoId, String nombre, boolean disponible) {}
 
     private final SimpMessagingTemplate messagingTemplate;
 
@@ -52,6 +56,11 @@ public class NotificadorKds {
     @TransactionalEventListener
     public void alConfirmarse(PedidoKdsEvent evento) {
         enviar("/topic/pedidos", evento);
+    }
+
+    @TransactionalEventListener
+    public void alConfirmarse(PlatoKdsEvent evento) {
+        enviar("/topic/platos", evento);
     }
 
     // Cada envío es independiente: un fallo en un tópico no impide notificar los demás.

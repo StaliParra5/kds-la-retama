@@ -76,9 +76,16 @@ async function crearMozo(tokenAdmin, datos) {
 async function cerrarMesa(mesaId, tokenMozo, tokenAdmin) {
   const atencion = await http('GET', `/mesas/${mesaId}/atencion`, tokenAdmin);
   if (atencion.status !== 200) return;
+  await despacharItems(atencion.data.pedidos.flatMap((p) => p.items));
+  const liberada = await http('POST', `/mesas/${mesaId}/atencion/liberar`, tokenMozo);
+  if (liberada.status !== 200) console.warn(`No se pudo liberar la mesa ${mesaId}: ${liberada.status} ${liberada.data?.mensaje}`);
+}
+
+// Lleva a Despachado los ítems de prueba que sigan en cocina, para no dejarlos en las colas
+async function despacharItems(items) {
   const expedidor = await login('login-pin', { username: 'expedidor1', pin: '9012' });
   const cocineros = new Map();
-  for (const item of atencion.data.pedidos.flatMap((p) => p.items)) {
+  for (const item of items) {
     let estado = item.estadoItem;
     if (estado === 'DESPACHADO' || estado === 'ANULADO') continue;
     if (!cocineros.has(item.estacionId)) {
@@ -90,8 +97,6 @@ async function cerrarMesa(mesaId, tokenMozo, tokenAdmin) {
       if (r.status === 200) estado = destino;
     }
   }
-  const liberada = await http('POST', `/mesas/${mesaId}/atencion/liberar`, tokenMozo);
-  if (liberada.status !== 200) console.warn(`No se pudo liberar la mesa ${mesaId}: ${liberada.status} ${liberada.data?.mensaje}`);
 }
 
-module.exports = { API, WS, sleep, http, login, loginCompleto, stompSuscriptor, vaciarCola, crearMozo, cerrarMesa };
+module.exports = { API, WS, sleep, http, login, loginCompleto, stompSuscriptor, vaciarCola, crearMozo, cerrarMesa, despacharItems };

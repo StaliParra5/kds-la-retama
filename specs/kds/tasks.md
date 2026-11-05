@@ -355,3 +355,9 @@
   - HU003: el catálogo de platos del admin se pagina de 10 en 10 (primera, última y vecinas de la actual), y vuelve a la primera página al cambiar un filtro.
   - HU044: las personas al abrir una mesa no superan su capacidad (servidor y comandero).
   - Criterio de Aceptación: `MozoServiceTest` y `AtencionServiceTest` (162 tests en verde); smokes `smoke_hu042.cjs`, `smoke_hu044_046.cjs` y el nuevo `smoke_hu003_paginacion.cjs`; las 17 suites en verde.
+
+- [x] **TASK-067 [FULL] [F2] Platos agotados en tiempo real (HU030)**
+  - `PlatoService` avisa por `/topic/platos` (tras el commit) al crear, editar o cambiar la disponibilidad de un plato; cualquier usuario autenticado puede suscribirse (`PermisosSuscripcion`).
+  - Comandero: escucha `/topic/platos` y recarga la carta (el plato agotado desaparece en menos de 5 s). Si el plato ya estaba en la comanda sin enviar, la línea se marca "Agotado", se avisa al mozo y el envío nuevo queda bloqueado hasta retirarlo; el reintento de un envío sin confirmar sigue permitido (idempotencia).
+  - Ya existían: `PATCH /platos/{id}/disponibilidad`, el botón Disponible/Agotado del catálogo, el rechazo del envío con plato agotado (HU009 Esc. 6) y la distinción agotado ≠ dado de baja (`activo`).
+  - Criterio de Aceptación: Escenarios 1 a 6 de HU030; `PlatoServiceTest` (166 tests en verde); smoke `smoke_hu030.cjs` 17/17.
