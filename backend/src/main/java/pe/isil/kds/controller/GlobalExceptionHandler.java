@@ -1,0 +1,152 @@
+package pe.isil.kds.controller;
+
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import pe.isil.kds.exception.EstadoDesactualizadoException;
+import pe.isil.kds.exception.AutorizacionAdminException;
+import pe.isil.kds.exception.OperacionNoPermitidaException;
+import pe.isil.kds.exception.RecursoNoEncontradoException;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Manejador Global Centralizado de Excepciones REST.
+ * 
+ * Garantiza respuestas JSON estructuradas y descriptivas en todos los endpoints,
+ * facilitando la depuración y previniendo la fuga de trazas internas del servidor (OWASP).
+ */
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<Map<String, Object>> handleBadCredentials(BadCredentialsException ex) {
+        return buildResponse(HttpStatus.UNAUTHORIZED, "Credenciales no válidas", ex.getMessage());
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
+        // Mensajes de dominio (ej. estación ajena) se muestran; el genérico de Spring se reemplaza
+        String mensaje = ex.getMessage() == null || "Access Denied".equals(ex.getMessage())
+                ? "No cuenta con los privilegios necesarios para esta operación."
+                : ex.getMessage();
+        return buildResponse(HttpStatus.FORBIDDEN, "Acceso denegado", mensaje);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException ex) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "Solicitud inválida", ex.getMessage());
+    }
+
+    @ExceptionHandler(OperacionNoPermitidaException.class)
+    public ResponseEntity<Map<String, Object>> handleOperacionNoPermitida(OperacionNoPermitidaException ex) {
+        ResponseEntity<Map<String, Object>> respuesta = buildResponse(HttpStatus.CONFLICT, "Operación no permitida", ex.getMessage());
+        if (ex.getCodigo() != null) {
+            respuesta.getBody().put("codigo", ex.getCodigo());
+        }
+        return respuesta;
+    }
+
+    // HU032 (D36): autorización del administrador faltante o incorrecta; 403 con código para que el diálogo la pida
+    @ExceptionHandler(AutorizacionAdminException.class)
+    public ResponseEntity<Map<String, Object>> handleAutorizacionAdmin(AutorizacionAdminException ex) {
+        ResponseEntity<Map<String, Object>> respuesta = buildResponse(HttpStatus.FORBIDDEN, "Autorización requerida", ex.getMessage());
+        respuesta.getBody().put("codigo", ex.getCodigo());
+        return respuesta;
+    }
+
+    @ExceptionHandler(EstadoDesactualizadoException.class)
+    public ResponseEntity<Map<String, Object>> handleEstadoDesactualizado(EstadoDesactualizadoException ex) {
+        ResponseEntity<Map<String, Object>> respuesta = buildResponse(HttpStatus.CONFLICT, "Estado desactualizado", ex.getMessage());
+        respuesta.getBody().put("item", ex.getItemActual());
+        return respuesta;
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<Map<String, Object>> handleConflictoVersion(ObjectOptimisticLockingFailureException ex) {
+        return buildResponse(HttpStatus.CONFLICT, "Estado desactualizado",
+                "El registro fue modificado por otro usuario al mismo tiempo. Actualice la pantalla e intente de nuevo.");
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleCuerpoIlegible(HttpMessageNotReadableException ex) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "Solicitud inválida",
+                "El cuerpo de la solicitud no tiene el formato esperado o contiene valores no permitidos.");
+    }
+
+    @ExceptionHandler(RecursoNoEncontradoException.class)
+    public ResponseEntity<Map<String, Object>> handleRecursoNoEncontrado(RecursoNoEncontradoException ex) {
+        return buildResponse(HttpStatus.NOT_FOUND, "Recurso no encontrado", ex.getMessage());
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleConflictoDatos(DataIntegrityViolationException ex) {
+        log.warn("Violación de integridad de datos: {}", ex.getMostSpecificCause().getMessage());
+        return buildResponse(HttpStatus.CONFLICT, "Conflicto de datos",
+                "No se pudo registrar la operación por un conflicto con datos existentes. Intente nuevamente.");
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, Object>> handleMetodoNoPermitido(HttpRequestMethodNotSupportedException ex) {
+        return buildResponse(HttpStatus.METHOD_NOT_ALLOWED, "Método no permitido",
+                "La operación " + ex.getMethod() + " no está disponible para este recurso.");
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleRecursoInexistente(NoResourceFoundException ex) {
+        return buildResponse(HttpStatus.NOT_FOUND, "Recurso no encontrado", "La ruta solicitada no existe.");
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, Object>> handleValidationErrors(MethodArgumentNotValidException ex) {
+        Map<String, String> errores = new HashMap<>();
+        for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
+            errores.put(fieldError.getField(), fieldError.getDefaultMessage());
+        }
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", HttpStatus.BAD_REQUEST.value());
+        body.put("error", "Error de validación de campos");
+        body.put("detalles", errores);
+        // Primer error en formato legible para mostrar directamente en los toasts del frontend
+        ex.getBindingResult().getFieldErrors().stream().findFirst()
+                .ifPresent(fieldError -> body.put("mensaje", fieldError.getDefaultMessage()));
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
+        // Registro detallado en logs de servidor para depuración interna sin exponer detalles al cliente
+        log.error("Error no controlado capturado por GlobalExceptionHandler: ", ex);
+        return buildResponse(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Error interno del servidor",
+                "Ha ocurrido un error inesperado al procesar la solicitud. Por favor contacte al soporte técnico."
+        );
+    }
+
+    private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String error, String message) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", status.value());
+        body.put("error", error);
+        body.put("mensaje", message);
+        return ResponseEntity.status(status).body(body);
+    }
+}

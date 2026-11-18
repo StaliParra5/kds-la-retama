@@ -1,0 +1,90 @@
+package pe.isil.kds.service;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionalEventListener;
+import pe.isil.kds.dto.ItemCocinaDto;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Publica por WebSocket los cambios de ítems solo después del commit, de modo que
+ * las pantallas nunca reciban datos de una transacción revertida.
+ *
+ * Tópicos:
+ * - /topic/estacion/{id}: ítems de una estación de cocina (HU011, HU012). Cada estación
+ *   recibe únicamente sus ítems, ya con cantidad y modificadores.
+ * - /topic/items: todos los ítems, para el pase y monitores generales.
+ * - /topic/pedidos: altas y cambios de estado de pedidos, y un aviso por cada pedido cuyo ítem cambió de
+ *   estado aunque el pedido siga igual. Es el único tópico de pedidos que el mozo puede escuchar, y le
+ *   sirve para ver cómo cocina avanza sus ítems sin recargar (comandero y monitores).
+ * - /topic/platos: cambios de la carta, como un plato agotado o reactivado (HU030), para que el
+ *   comandero recargue la carta en menos de 5 segundos.
+ */
+@Component
+public class NotificadorKds {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificadorKds.class);
+
+    public enum TipoEvento { ITEM_NUEVO, ITEM_ACTUALIZADO }
+
+    public enum TipoEventoPedido { PEDIDO_NUEVO, PEDIDO_ACTUALIZADO }
+
+    public record ItemsKdsEvent(TipoEvento tipo, List<ItemCocinaDto> items) {}
+
+    public record MensajeKds(TipoEvento tipo, ItemCocinaDto item) {}
+
+    public record PedidoKdsEvent(TipoEventoPedido tipo, Long pedidoId, String codigoPedido, String estado) {}
+
+    public record PlatoKdsEvent(Long platoId, String nombre, boolean disponible) {}
+
+    private final SimpMessagingTemplate messagingTemplate;
+
+    public NotificadorKds(SimpMessagingTemplate messagingTemplate) {
+        this.messagingTemplate = messagingTemplate;
+    }
+
+    @TransactionalEventListener
+    public void alConfirmarse(ItemsKdsEvent evento) {
+        for (ItemCocinaDto item : evento.items()) {
+            MensajeKds mensaje = new MensajeKds(evento.tipo(), item);
+            enviar("/topic/estacion/" + item.getEstacionId(), mensaje);
+            enviar("/topic/items", mensaje);
+        }
+        // El mozo no puede escuchar los tópicos de estación ni de ítems, y el estado del pedido solo cambia cuando
+        // avanza todo el conjunto: cada cambio de un ítem avisa también por el tópico de pedidos, una sola vez por pedido
+        if (evento.tipo() == TipoEvento.ITEM_ACTUALIZADO) {
+            Set<Long> avisados = new HashSet<>();
+            for (ItemCocinaDto item : evento.items()) {
+                if (item.getPedidoId() != null && avisados.add(item.getPedidoId())) {
+                    enviar("/topic/pedidos", new PedidoKdsEvent(TipoEventoPedido.PEDIDO_ACTUALIZADO,
+                            item.getPedidoId(), item.getCodigoPedido(), item.getEstadoPedido()));
+                }
+            }
+        }
+    }
+
+    @TransactionalEventListener
+    public void alConfirmarse(PedidoKdsEvent evento) {
+        enviar("/topic/pedidos", evento);
+    }
+
+    @TransactionalEventListener
+    public void alConfirmarse(PlatoKdsEvent evento) {
+        enviar("/topic/platos", evento);
+    }
+
+    // Cada envío es independiente: un fallo en un tópico no impide notificar los demás.
+    // Las pantallas recargan su cola al reconectarse, así que un fallo no debe romper el flujo.
+    private void enviar(String destino, Object mensaje) {
+        try {
+            messagingTemplate.convertAndSend(destino, mensaje);
+        } catch (Exception e) {
+            log.warn("No se pudo notificar por WebSocket a {}: {}", destino, e.getMessage());
+        }
+    }
+}
