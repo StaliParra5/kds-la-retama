@@ -2,6 +2,7 @@ package pe.isil.kds.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import pe.isil.kds.model.EstadoItem;
 import pe.isil.kds.model.MotivoAnulacion;
@@ -19,7 +20,8 @@ public class AnularItemRequest {
     @NotNull(message = "El estado actual del ítem es obligatorio")
     private EstadoItem estadoActual;
 
-    // D36: credenciales del administrador que autoriza anular un ítem ya iniciado; no se usan para ítems pendientes
+    // D36: usuario y clave de autorización (PIN de 6 dígitos, no su contraseña) del administrador que autoriza
+    // anular un ítem ya iniciado; no se usan para ítems pendientes
     @Valid
     private Autorizacion autorizacion;
 
@@ -44,29 +46,29 @@ public class AnularItemRequest {
     public Autorizacion getAutorizacion() { return autorizacion; }
     public void setAutorizacion(Autorizacion autorizacion) { this.autorizacion = autorizacion; }
 
-    /** Usuario y contraseña del administrador que autoriza. La contraseña nunca se registra ni se devuelve. */
+    /** Usuario y clave de autorización del administrador. La clave nunca se registra ni se devuelve. */
     public static class Autorizacion {
 
         @Size(max = 50, message = "El usuario del administrador admite hasta 50 caracteres")
         private String usuario;
 
-        @Size(max = 100, message = "La contraseña del administrador admite hasta 100 caracteres")
-        private String password;
+        @Pattern(regexp = "^\\d{6}$", message = "La clave de autorización tiene 6 dígitos")
+        private String clave;
 
         public Autorizacion() {}
 
-        public Autorizacion(String usuario, String password) {
+        public Autorizacion(String usuario, String clave) {
             this.usuario = usuario;
-            this.password = password;
+            this.clave = clave;
         }
 
         public String getUsuario() { return usuario; }
         public void setUsuario(String usuario) { this.usuario = usuario; }
 
-        public String getPassword() { return password; }
-        public void setPassword(String password) { this.password = password; }
+        public String getClave() { return clave; }
+        public void setClave(String clave) { this.clave = clave; }
 
-        // Evita que la contraseña aparezca si el objeto llega a imprimirse en un log
+        // Evita que la clave aparezca si el objeto llega a imprimirse en un log
         @Override
         public String toString() {
             return "Autorizacion[usuario=" + usuario + "]";

@@ -13,7 +13,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { ahoraServidor, useRelojServidor } from '../api/reloj';
 import { useRecargaAgrupada, useTiempoReal } from '../api/tiempoReal';
+import { CanalFranja } from '../components/cocina/CanalFranja';
 import { Cronometro } from '../components/cocina/Cronometro';
+import { TarjetaSemaforo } from '../components/cocina/TarjetaSemaforo';
 import { TopAppBar } from '../components/common/TopAppBar';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -150,7 +152,12 @@ export const CocinaPage: React.FC = () => {
   const recargarCola = useRecargaAgrupada(['cola', estacionId]);
   const colaRef = useRef(cola);
   colaRef.current = cola;
-  const alMensaje = (_destino: string, cuerpo: unknown) => {
+  const alMensaje = (destino: string, cuerpo: unknown) => {
+    // HU025 Esc. 4: cambió el SLA, el umbral o la apariencia de un canal; la cola trae los valores nuevos
+    if (destino === '/topic/canales') {
+      recargarCola();
+      return;
+    }
     const item = (cuerpo as { item?: ItemCocina } | null)?.item;
     if (item && (item.estado === 'DESPACHADO' || item.estado === 'ANULADO')) {
       // HU032 Esc. 5: si ya se estaba cocinando el aviso queda fijo para que nadie lo termine por error;
@@ -175,7 +182,7 @@ export const CocinaPage: React.FC = () => {
     recargarCola();
   };
   const { conectado, rechazo } = useTiempoReal({
-    destinos: estacionId != null ? [`/topic/estacion/${estacionId}`] : [],
+    destinos: estacionId != null ? [`/topic/estacion/${estacionId}`, '/topic/canales'] : [],
     alMensaje,
     alConectar: recargarCola,
   });
@@ -522,11 +529,21 @@ export const CocinaPage: React.FC = () => {
             {grupos.map((grupo) => {
               const destino = destinoPedido(grupo);
               return (
-                <article
+                // HU025: el borde de la tarjeta toma el color del semáforo; HU015: la franja superior, el del canal
+                <TarjetaSemaforo
                   key={grupo.pedidoId}
-                  data-pedido={grupo.codigoPedido}
-                  className="bg-surface-container-lowest border border-surface-container-high rounded-2xl shadow-sm overflow-hidden flex flex-col"
+                  codigoPedido={grupo.codigoPedido}
+                  envioMs={grupo.envioCocinaEpochMs}
+                  slaMinutos={grupo.canalSlaMinutos}
+                  umbralAmbar={grupo.canalUmbralAmbar}
+                  ambarMinutos={grupo.canalAmbarMinutos}
                 >
+                  <CanalFranja
+                    codigo={grupo.canalCodigo}
+                    nombre={grupo.canalNombre}
+                    color={grupo.canalColor}
+                    icono={grupo.canalIcono}
+                  />
                   <header className="px-4 py-3 bg-surface-container-low border-b border-surface-container-high flex items-start justify-between gap-2">
                     {/* HU021 Esc. 1: código, canal, destino, ítems con modificadores y cronómetro en la misma tarjeta */}
                     <div className="min-w-0">
@@ -544,12 +561,6 @@ export const CocinaPage: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      <p
-                        data-canal
-                        className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mt-0.5"
-                      >
-                        {grupo.canalNombre}
-                      </p>
                       {/* HU021 Esc. 3: salón con zona y mesa; para llevar o delivery con el cliente */}
                       {destino && (
                         <p
@@ -570,6 +581,8 @@ export const CocinaPage: React.FC = () => {
                     <Cronometro
                       envioMs={grupo.envioCocinaEpochMs}
                       slaMinutos={grupo.canalSlaMinutos}
+                      umbralAmbar={grupo.canalUmbralAmbar}
+                  ambarMinutos={grupo.canalAmbarMinutos}
                     />
                   </header>
 
@@ -639,7 +652,7 @@ export const CocinaPage: React.FC = () => {
                       {grupo.itemsEnOtrasEstaciones === 1 ? 'ítem' : 'ítems'} en otras estaciones
                     </footer>
                   )}
-                </article>
+                </TarjetaSemaforo>
               );
             })}
           </div>

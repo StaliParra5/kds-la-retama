@@ -9,6 +9,13 @@ public class CanalDto {
     private Boolean activo;
     // HU019/HU020: agregador (Rappi); el comandero no lo ofrece y su pedido exige número de orden
     private Boolean externo = false;
+    // HU015: apariencia del canal en las tarjetas
+    private String color;
+    private String icono;
+    // HU025: porcentaje del SLA en el que el semáforo pasa a ámbar
+    private Integer umbralAmbarPorcentaje;
+    // D39: ámbar en minutos fijos (solo Salón, viene de la pestaña Salón)
+    private Integer umbralAmbarMinutos;
 
     public CanalDto() {}
 
@@ -37,4 +44,16 @@ public class CanalDto {
 
     public Boolean getExterno() { return externo; }
     public void setExterno(Boolean externo) { this.externo = externo; }
+
+    public String getColor() { return color; }
+    public void setColor(String color) { this.color = color; }
+
+    public String getIcono() { return icono; }
+    public void setIcono(String icono) { this.icono = icono; }
+
+    public Integer getUmbralAmbarMinutos() { return umbralAmbarMinutos; }
+    public void setUmbralAmbarMinutos(Integer umbralAmbarMinutos) { this.umbralAmbarMinutos = umbralAmbarMinutos; }
+
+    public Integer getUmbralAmbarPorcentaje() { return umbralAmbarPorcentaje; }
+    public void setUmbralAmbarPorcentaje(Integer umbralAmbarPorcentaje) { this.umbralAmbarPorcentaje = umbralAmbarPorcentaje; }
 }

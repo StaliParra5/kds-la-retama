@@ -5,27 +5,27 @@
 // - Se actualiza en tiempo real con el tópico general de ítems (expedidor y admin).
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { useRelojServidor } from '../api/reloj';
 import { useRecargaAgrupada, useTiempoReal } from '../api/tiempoReal';
+import { CanalFranja } from '../components/cocina/CanalFranja';
+import { Cronometro } from '../components/cocina/Cronometro';
+import { TarjetaSemaforo } from '../components/cocina/TarjetaSemaforo';
 import { TopAppBar } from '../components/common/TopAppBar';
 import { useToast } from '../context/ToastContext';
 import type { ItemCocina } from '../types';
-import { agruparPorPedido, claseSemaforo, ESTILO_ESTADO, minutosDesde } from '../utils/cocina';
+import { agruparPorPedido, ESTILO_ESTADO } from '../utils/cocina';
 
 const CLAVE_LISTOS = ['listos'];
 
 export const PasePage: React.FC = () => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const [ahora, setAhora] = useState(() => Date.now());
   const [enCurso, setEnCurso] = useState<Set<number>>(() => new Set());
-
-  useEffect(() => {
-    const intervalo = setInterval(() => setAhora(Date.now()), 30000);
-    return () => clearInterval(intervalo);
-  }, []);
+  // HU025 Esc. 3: el semáforo y el cronómetro del pase usan la hora del servidor, como en cocina
+  useRelojServidor();
 
   const {
     data: listos = [],
@@ -38,8 +38,9 @@ export const PasePage: React.FC = () => {
 
   // Cada cambio de ítem en cualquier estación recarga la lista
   const recargar = useRecargaAgrupada(CLAVE_LISTOS);
+  // HU025 Esc. 4: un cambio de SLA, umbral o apariencia de un canal también recarga la lista
   const { conectado, rechazo } = useTiempoReal({
-    destinos: ['/topic/items'],
+    destinos: ['/topic/items', '/topic/canales'],
     alMensaje: recargar,
     alConectar: recargar,
   });
@@ -190,23 +191,32 @@ export const PasePage: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
             {grupos.map((grupo) => {
-              const minutos = minutosDesde(grupo.fechaEnvioCocina, ahora);
               const ocupado = grupo.items.some((i) => enCurso.has(i.id));
               return (
-                <article
+                // HU015/HU025: misma franja de canal y mismo marco de semáforo que en la estación (HU015 Esc. 5)
+                <TarjetaSemaforo
                   key={grupo.pedidoId}
-                  data-pedido={grupo.codigoPedido}
-                  className="bg-surface-container-lowest border border-surface-container-high rounded-2xl shadow-sm overflow-hidden flex flex-col"
+                  codigoPedido={grupo.codigoPedido}
+                  envioMs={grupo.envioCocinaEpochMs}
+                  slaMinutos={grupo.canalSlaMinutos}
+                  umbralAmbar={grupo.canalUmbralAmbar}
+                  ambarMinutos={grupo.canalAmbarMinutos}
                 >
+                  <CanalFranja
+                    codigo={grupo.canalCodigo}
+                    nombre={grupo.canalNombre}
+                    color={grupo.canalColor}
+                    icono={grupo.canalIcono}
+                  />
                   <header className="px-4 py-3 bg-surface-container-low border-b border-surface-container-high flex items-start justify-between gap-2">
                     <div>
                       <p className="font-mono text-base font-extrabold text-primary">
                         {grupo.codigoPedido}
                       </p>
                       <p className="text-xs font-semibold text-on-surface-variant mt-0.5">
-                        {grupo.canalNombre}
-                        {grupo.mesaNumero ? ` · Mesa ${grupo.mesaNumero}` : ''}
-                        {grupo.clienteNombre ? ` · ${grupo.clienteNombre}` : ''}
+                        {grupo.mesaNumero ? `Mesa ${grupo.mesaNumero}` : ''}
+                        {grupo.mesaNumero && grupo.clienteNombre ? ' · ' : ''}
+                        {grupo.clienteNombre ?? ''}
                       </p>
                       {/* HU020 Esc. 3: número de orden del agregador junto al código del pedido */}
                       {grupo.numeroOrdenExterno && (
@@ -215,13 +225,12 @@ export const PasePage: React.FC = () => {
                         </p>
                       )}
                     </div>
-                    <span
-                      title={`SLA del canal: ${grupo.canalSlaMinutos} min`}
-                      className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-sm font-extrabold font-mono ${claseSemaforo(minutos, grupo.canalSlaMinutos)}`}
-                    >
-                      <span className="material-symbols-outlined text-[16px]">timer</span>
-                      {minutos} min
-                    </span>
+                    <Cronometro
+                      envioMs={grupo.envioCocinaEpochMs}
+                      slaMinutos={grupo.canalSlaMinutos}
+                      umbralAmbar={grupo.canalUmbralAmbar}
+                  ambarMinutos={grupo.canalAmbarMinutos}
+                    />
                   </header>
 
                   {/* Si el pedido aún tiene ítems en cocina, el expedidor decide si espera */}
@@ -282,7 +291,7 @@ export const PasePage: React.FC = () => {
                       </button>
                     </footer>
                   )}
-                </article>
+                </TarjetaSemaforo>
               );
             })}
           </div>

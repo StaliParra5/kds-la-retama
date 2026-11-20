@@ -113,4 +113,13 @@ async function activarCanal(codigo) {
   };
 }
 
-module.exports = { API, WS, sleep, http, login, loginCompleto, activarCanal, stompSuscriptor, vaciarCola, crearMozo, cerrarMesa, despacharItems };
+// HU049 (D36): deja configurada la clave de autorización del administrador de prueba (PIN de 6 dígitos, distinto
+// de su contraseña). Ojo: reemplaza la clave que el administrador tuviera en esta base local.
+const CLAVE_AUTORIZACION_PRUEBA = '246810';
+async function asegurarClaveAdmin(adminToken) {
+  const r = await http('PUT', '/cuenta/clave-autorizacion', adminToken, { passwordActual: 'admin123', clave: CLAVE_AUTORIZACION_PRUEBA });
+  if (r.status !== 200) throw new Error(`No se pudo configurar la clave de autorización: ${r.status} ${r.data?.mensaje ?? ''}`);
+  return { usuario: 'admin', clave: CLAVE_AUTORIZACION_PRUEBA };
+}
+
+module.exports = { API, WS, sleep, http, login, loginCompleto, activarCanal, stompSuscriptor, vaciarCola, crearMozo, cerrarMesa, despacharItems, asegurarClaveAdmin, CLAVE_AUTORIZACION_PRUEBA };

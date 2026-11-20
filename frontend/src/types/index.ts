@@ -115,6 +115,12 @@ export interface CanalVenta {
   activo: boolean;
   // HU019/HU020: agregador; el comandero no lo ofrece y su pedido exige el número de orden
   externo?: boolean;
+  // HU015: color (#RRGGBB) e ícono del canal; HU025: % del SLA en que el semáforo pasa a ámbar
+  color?: string | null;
+  icono?: string | null;
+  umbralAmbarPorcentaje?: number;
+  // D39: ámbar en minutos fijos (solo Salón, configurado en la pestaña Salón)
+  umbralAmbarMinutos?: number | null;
 }
 
 export interface CategoriaPlato {
@@ -207,6 +213,12 @@ export interface ItemCocina {
   // HU021: zona de la mesa (destino), número de adición (0 = original) y envío a cocina como instante del servidor
   zonaNombre?: string | null;
   numeroAdicion?: number;
+  // HU015/HU025: apariencia y umbral ámbar del canal
+  canalColor?: string | null;
+  canalIcono?: string | null;
+  canalUmbralAmbar?: number | null;
+  // D39: minuto en que pasa a ámbar ya resuelto por el servidor (Salón: amarillo de la pestaña Salón)
+  canalAmbarMinutos?: number | null;
   envioCocinaEpochMs?: number | null;
   id: number;
   version: number;

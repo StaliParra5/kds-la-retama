@@ -39,6 +39,8 @@ class PermisosSuscripcionTest {
         assertTrue(PermisosSuscripcion.puedeSuscribirse(mozo, "/topic/pedidos"));
         // HU030: cualquier usuario autenticado escucha los cambios de la carta
         assertTrue(PermisosSuscripcion.puedeSuscribirse(mozo, "/topic/platos"));
+        // HU025: cualquier usuario autenticado se entera de cambios de SLA, umbral y apariencia de canales
+        assertTrue(PermisosSuscripcion.puedeSuscribirse(mozo, "/topic/canales"));
         assertFalse(PermisosSuscripcion.puedeSuscribirse(mozo, "/topic/estacion/2"));
         assertFalse(PermisosSuscripcion.puedeSuscribirse(admin, "/topic/estacion/2/extra"));
         assertFalse(PermisosSuscripcion.puedeSuscribirse(admin, "/topic/estacion/abc"));

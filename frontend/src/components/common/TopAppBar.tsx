@@ -202,6 +202,21 @@ export const TopAppBar: React.FC = () => {
               <span className="material-symbols-outlined text-[18px]">timer</span>
               <span>Canales & SLA</span>
             </NavLink>
+
+            {/* HU049: clave de autorización para anular ítems iniciados */}
+            <NavLink
+              to="/admin/mi-clave"
+              className={({ isActive }) =>
+                `flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${
+                  isActive
+                    ? 'bg-primary text-on-primary shadow-sm'
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+                }`
+              }
+            >
+              <span className="material-symbols-outlined text-[18px]">password</span>
+              <span>Mi clave</span>
+            </NavLink>
           </>
         )}
       </nav>

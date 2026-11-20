@@ -410,8 +410,20 @@
   - Concurrencia: se bloquea la fila del canal (`CanalVentaRepository.bloquearPorId`) solo cuando hay número de orden, así los reenvíos simultáneos se atienden de a uno; los pedidos del comandero no esperan.
   - Pruebas: `PedidoServiceTest`, `PedidoExternoServiceTest`; smoke `smoke_hu034.cjs` (incluye cinco reenvíos simultáneos).
 
-- [ ] **TASK-077 [FULL] [F2] Autorizar la anulación de ítems iniciados (HU049, D36)** — implementado, pendiente de verificar build, pruebas y flujo en vivo
+- [x] **TASK-077 [FULL] [F2] Autorizar la anulación de ítems iniciados (HU049, D36)** — verificada: build en verde y smokes de HU032, HU020 y HU017 en OK
   - Backend: migración `V21__merma_autorizacion.sql` (`mermas.autorizado_por_id` y `autorizado_por_nombre`); `MotivoAnulacion` con motivos por estado; `AnularItemRequest.autorizacion` (usuario y contraseña, nunca registrada); `AnulacionItemService` valida un administrador activo con BCrypt y limita a 5 intentos fallidos en 5 min por usuario; `AutorizacionAdminException` responde 403 con código (nunca 401, para no cerrar la sesión del mozo); `GET /items/motivos-anulacion?estado=`; `MermaDto.autorizadoPor`.
   - Frontend: `AnulacionItem.tsx` pide los motivos del estado del ítem y, si ya se inició y quien anula no es administrador, los campos de usuario y contraseña del administrador.
   - Pruebas: `AnulacionItemServiceTest` (autorización requerida, incorrecta, bloqueo, expedidor, administrador, motivos por estado); smokes `smoke_hu032.cjs`, `smoke_hu017.cjs` y `smoke_hu020.cjs` actualizados.
+  - Ajuste del 2026-11-18: la autorización usa una **clave de autorización** (PIN de 6 dígitos) propia de cada administrador, distinta de su contraseña. Migración `V23__clave_autorizacion.sql`; `CuentaService` y `CuentaController` (`GET/PUT /api/v1/cuenta/clave-autorizacion`, confirma con la contraseña); pantalla `AdminMiClavePage` en `/admin/mi-clave` con acceso "Mi clave" en el menú; el diálogo de anulación pide la clave. Pruebas: `CuentaServiceTest`, `AnulacionItemServiceTest`; `lib.cjs` configura la clave de prueba 246810.
+
+- [x] **TASK-078 [FULL] [F2] Identificar el canal visualmente (HU015, D37)** — verificada: build en verde, `smoke_hu015.cjs` en OK y lectura a 1,5 m
+  - Backend: migración `V22__canal_apariencia_umbral.sql` (color, icono y umbral ámbar en `canales_venta`, con la apariencia inicial); `ColorCanal` (contraste con blanco, distancia al semáforo y a otros canales); `PUT /api/v1/canales/{id}/apariencia`; `CanalDto` e `ItemCocinaDto` con color e ícono; revisión del color al reactivar un canal.
+  - Frontend: `components/cocina/CanalFranja.tsx` (franja con color, ícono y nombre; comentario del logo de Rappi), usada en `CocinaPage` y `PasePage`; `utils/canal.ts` (lista provisional de íconos y las mismas reglas de color); `AdminCanalesPage` con color, ícono y vista previa.
+  - Pruebas: `ColorCanalTest`, `CanalServiceTest`, `ItemCocinaMapperTest`; smoke `smoke_hu015.cjs`.
+
+- [ ] **TASK-079 [FULL] [F2] Semáforo por SLA (HU025, D38)** — implementado, pendiente de verificar build, pruebas y flujo en vivo
+  - Backend: umbral ámbar por canal en `PUT /api/v1/canales/{id}/sla` (1 a 99 %); `NotificadorKds.CanalKdsEvent` publica `/topic/canales` ante cualquier cambio de canal (permitido a todos en `PermisosSuscripcion`).
+  - Frontend: `nivelSemaforo` y `claseSemaforo` con umbral (`utils/cocina.ts`); `components/cocina/TarjetaSemaforo.tsx` (borde de la tarjeta con el semáforo, revisado cada segundo con la hora del servidor); `Cronometro` con umbral; `CocinaPage` y `PasePage` escuchan `/topic/canales`; `AdminCanalesPage` edita el umbral.
+  - Pruebas: `CanalServiceTest`, `PermisosSuscripcionTest`; smoke `smoke_hu025.cjs` (dura poco más de 1 minuto).
+  - Ajuste D39 (2026-11-18): un solo semáforo para Salón. Migración `V24__salon_semaforo_unico.sql` (`canales_venta.umbral_ambar_minutos`, Salón toma los minutos de `configuracion_semaforo`); `SalonService.actualizarSemaforo` copia los minutos al canal Salón y avisa; `CanalService` rechaza cambiar el SLA de Salón; `ItemCocinaDto.canalAmbarMinutos` (minuto ámbar resuelto en el servidor); `AdminCanalesPage` muestra un aviso con enlace a Salón. Pruebas: `SalonServiceTest`, `CanalServiceTest`, `ItemCocinaMapperTest` y el caso de Salón en `smoke_hu025.cjs`.
 

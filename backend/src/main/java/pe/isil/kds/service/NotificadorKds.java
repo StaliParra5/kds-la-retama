@@ -42,6 +42,9 @@ public class NotificadorKds {
 
     public record PlatoKdsEvent(Long platoId, String nombre, boolean disponible) {}
 
+    // HU015/HU025: cambió el SLA, el umbral ámbar, el color, el ícono o el estado de un canal
+    public record CanalKdsEvent(Long canalId, String codigo) {}
+
     private final SimpMessagingTemplate messagingTemplate;
 
     public NotificadorKds(SimpMessagingTemplate messagingTemplate) {
@@ -76,6 +79,12 @@ public class NotificadorKds {
     @TransactionalEventListener
     public void alConfirmarse(PlatoKdsEvent evento) {
         enviar("/topic/platos", evento);
+    }
+
+    // HU025 Esc. 4: las pantallas abiertas recalculan el semáforo y la apariencia de los pedidos de ese canal
+    @TransactionalEventListener
+    public void alConfirmarse(CanalKdsEvent evento) {
+        enviar("/topic/canales", evento);
     }
 
     // Cada envío es independiente: un fallo en un tópico no impide notificar los demás.

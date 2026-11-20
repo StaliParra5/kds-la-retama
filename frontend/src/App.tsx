@@ -10,6 +10,7 @@ import { ToastProvider } from './context/ToastContext';
 import { AdminCanalesPage } from './pages/AdminCanalesPage';
 import { AdminEstacionesPage } from './pages/AdminEstacionesPage';
 import { AdminMesasPage } from './pages/AdminMesasPage';
+import { AdminMiClavePage } from './pages/AdminMiClavePage';
 import { AdminMozosPage } from './pages/AdminMozosPage';
 import { AdminProductosPage } from './pages/AdminProductosPage';
 import { AdminSalonPage } from './pages/AdminSalonPage';
@@ -183,6 +184,16 @@ export default function App() {
                 element={
                   <ProtectedRoute requiredRole="ADMIN">
                     <AdminCanalesPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* HU049: clave de autorización del administrador para anular ítems iniciados */}
+              <Route
+                path="/admin/mi-clave"
+                element={
+                  <ProtectedRoute requiredRole="ADMIN">
+                    <AdminMiClavePage />
                   </ProtectedRoute>
                 }
               />

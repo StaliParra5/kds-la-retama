@@ -8,6 +8,11 @@ export interface GrupoPedido {
   canalNombre: string;
   // HU020 Esc. 3: número de orden del agregador, visible en la tarjeta
   numeroOrdenExterno?: string | null;
+  // HU015: apariencia del canal; HU025: umbral ámbar del canal
+  canalColor?: string | null;
+  canalIcono?: string | null;
+  canalUmbralAmbar?: number | null;
+  canalAmbarMinutos?: number | null;
   // HU021: destino (zona y mesa), adición y cronómetro según la hora del servidor
   zonaNombre?: string | null;
   numeroAdicion: number;
@@ -35,6 +40,10 @@ export const agruparPorPedido = (items: ItemCocina[]): GrupoPedido[] => {
         canalNombre: item.canalNombre,
         numeroOrdenExterno: item.numeroOrdenExterno,
         zonaNombre: item.zonaNombre,
+        canalColor: item.canalColor,
+        canalIcono: item.canalIcono,
+        canalUmbralAmbar: item.canalUmbralAmbar,
+        canalAmbarMinutos: item.canalAmbarMinutos,
         numeroAdicion: item.numeroAdicion ?? 0,
         // Sin el instante del servidor (respuesta antigua) se usa la fecha de envío tal como llega
         envioCocinaEpochMs: item.envioCocinaEpochMs ?? new Date(item.fechaEnvioCocina).getTime(),
@@ -106,9 +115,32 @@ export const listaModificadores = (texto?: string | null): string[] =>
     .filter(Boolean);
 
 // Semáforo contra el SLA del canal: verde, ámbar desde el 75 % y rojo al superarlo
-export const claseSemaforo = (minutos: number, sla: number): string => {
-  if (sla > 0 && minutos >= sla) return 'border-error bg-error/10 text-error';
-  if (sla > 0 && minutos >= sla * 0.75) return 'border-tertiary bg-tertiary/10 text-tertiary';
+// HU025: nivel del semáforo. Verde hasta el minuto ámbar, ámbar hasta el SLA y rojo desde el SLA.
+// D39: si el servidor manda el minuto ámbar ya resuelto (Salón usa los minutos de la pestaña Salón) se usa ese;
+// si no, se calcula con el umbral en % del SLA (75 si no está configurado)
+export type NivelSemaforo = 'verde' | 'ambar' | 'rojo';
+
+export const nivelSemaforo = (
+  minutos: number,
+  sla: number,
+  umbralAmbar?: number | null,
+  ambarMinutos?: number | null,
+): NivelSemaforo => {
+  if (sla <= 0) return 'verde';
+  if (minutos >= sla) return 'rojo';
+  if (minutos >= (ambarMinutos ?? (sla * (umbralAmbar ?? 75)) / 100)) return 'ambar';
+  return 'verde';
+};
+
+export const claseSemaforo = (
+  minutos: number,
+  sla: number,
+  umbralAmbar?: number | null,
+  ambarMinutos?: number | null,
+): string => {
+  const nivel = nivelSemaforo(minutos, sla, umbralAmbar, ambarMinutos);
+  if (nivel === 'rojo') return 'border-error bg-error/10 text-error';
+  if (nivel === 'ambar') return 'border-tertiary bg-tertiary/10 text-tertiary';
   return 'border-secondary/40 bg-secondary/10 text-secondary';
 };
 

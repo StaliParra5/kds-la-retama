@@ -5,7 +5,7 @@
 const path = require('path');
 const FRONT = path.resolve(__dirname, '../../frontend');
 const puppeteer = require(path.join(FRONT, 'node_modules/puppeteer-core'));
-const { sleep, http, login, loginCompleto, activarCanal, vaciarCola, despacharItems } = require('./lib.cjs');
+const { sleep, http, login, loginCompleto, activarCanal, vaciarCola, despacharItems, asegurarClaveAdmin } = require('./lib.cjs');
 
 const BASE = 'http://localhost:5173';
 const OUT = process.env.E2E_OUT || require('os').tmpdir();
@@ -66,7 +66,8 @@ async function esperar(page, fn, arg, ms = 3000) {
     };
     const unItem = async (plato, cantidad = 1) => (await crear([{ platoId: plato.id, cantidad }]));
     // D36: un ítem ya iniciado (En preparación o Listo) solo se anula con usuario y contraseña de un administrador
-    const CLAVE_ADMIN = { usuario: 'admin', password: 'admin123' };
+    // D36: clave de autorización del administrador (PIN de 6 dígitos), no su contraseña
+    const CLAVE_ADMIN = await asegurarClaveAdmin(admin.token);
     const anular = (itemId, estadoActual, motivo, token = mozo, autorizacion = undefined) =>
       http('POST', `/items/${itemId}/anulacion`, token, motivo === undefined ? { estadoActual } : { estadoActual, motivo, autorizacion });
     const mover = (itemId, token, de, a) => http('PATCH', `/items/${itemId}/estado`, token, { estadoActual: de, estadoDestino: a });
@@ -91,8 +92,10 @@ async function esperar(page, fn, arg, ms = 3000) {
     // D36: sin autorización, con una clave incorrecta o con un motivo de pendiente, el mozo no puede anularlo
     const sinClave = await anular(it2.id, 'EN_PREPARACION', 'PLATO_CON_DEFECTO');
     check('D36 un ítem en preparación sin clave de administrador se rechaza (403)', sinClave.status === 403 && sinClave.data?.codigo === 'AUTORIZACION_ADMIN_REQUERIDA', `${sinClave.status} ${sinClave.data?.codigo}`);
-    const claveMala = await anular(it2.id, 'EN_PREPARACION', 'PLATO_CON_DEFECTO', mozo, { usuario: 'admin', password: 'incorrecta' });
+    const claveMala = await anular(it2.id, 'EN_PREPARACION', 'PLATO_CON_DEFECTO', mozo, { usuario: 'admin', clave: '000000' });
     check('D36 una clave de administrador incorrecta se rechaza sin cerrar la sesión (403, no 401)', claveMala.status === 403 && claveMala.data?.codigo === 'AUTORIZACION_ADMIN_INVALIDA', `${claveMala.status} ${claveMala.data?.codigo}`);
+    const contrasena = await anular(it2.id, 'EN_PREPARACION', 'PLATO_CON_DEFECTO', mozo, { usuario: 'admin', clave: 'admin123' });
+    check('D36 la contraseña de la cuenta no sirve como clave de autorización', contrasena.status === 400 || contrasena.status === 403, `${contrasena.status} ${contrasena.data?.mensaje}`);
     const motivoPendiente = await anular(it2.id, 'EN_PREPARACION', 'ERROR_DIGITACION', mozo, CLAVE_ADMIN);
     check('D36 un motivo de pendiente no aplica a un ítem iniciado', motivoPendiente.status === 400, `${motivoPendiente.status} ${motivoPendiente.data?.mensaje}`);
     const r2 = await anular(it2.id, 'EN_PREPARACION', 'PLATO_CON_DEFECTO', mozo, CLAVE_ADMIN);

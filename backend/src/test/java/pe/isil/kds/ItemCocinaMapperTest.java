@@ -30,10 +30,43 @@ class ItemCocinaMapperTest {
         salon.setCodigo("SALON");
         salon.setNombre("Salón");
         salon.setSlaObjetivoMinutos(15);
+        salon.setColor("#1d4ed8");
+        salon.setIcono("table_restaurant");
+        salon.setUmbralAmbarPorcentaje(80);
         pedido = new Pedido();
         pedido.setId(7L);
         pedido.setCodigoCorrelativo("CMD-261103-0007");
         pedido.setCanal(salon);
+    }
+
+    @Test
+    @DisplayName("HU015 Esc. 3 y 5 / HU025: El ítem lleva color, ícono y umbral ámbar del canal, iguales para estación y pase")
+    void canal_LlevaAparienciaYUmbral() {
+        DetallePedido lomo = item(1L, "Lomo Saltado", plancha);
+        pedido.addItem(lomo);
+
+        ItemCocinaDto dto = ItemCocinaMapper.aDto(lomo);
+
+        assertEquals("#1d4ed8", dto.getCanalColor());
+        assertEquals("table_restaurant", dto.getCanalIcono());
+        assertEquals(80, dto.getCanalUmbralAmbar());
+        assertEquals(15, dto.getCanalSlaMinutos());
+        // Sin minutos fijos, el ámbar sale del porcentaje: 80 % de 15 min = 12 min
+        assertEquals(12.0, dto.getCanalAmbarMinutos());
+    }
+
+    @Test
+    @DisplayName("D39: Salón usa el ámbar en minutos fijos de la pestaña Salón, no el porcentaje")
+    void salon_AmbarEnMinutosFijos() {
+        pedido.getCanal().setSlaObjetivoMinutos(30);
+        pedido.getCanal().setUmbralAmbarMinutos(20);
+        DetallePedido lomo = item(1L, "Lomo Saltado", plancha);
+        pedido.addItem(lomo);
+
+        ItemCocinaDto dto = ItemCocinaMapper.aDto(lomo);
+
+        assertEquals(20.0, dto.getCanalAmbarMinutos());
+        assertEquals(30, dto.getCanalSlaMinutos());
     }
 
     @Test

@@ -1,5 +1,6 @@
 package pe.isil.kds.service;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.isil.kds.dto.SalonDto;
@@ -12,6 +13,7 @@ import pe.isil.kds.model.Pedido;
 import pe.isil.kds.model.Usuario;
 import pe.isil.kds.model.Zona;
 import pe.isil.kds.repository.AtencionMesaRepository;
+import pe.isil.kds.repository.CanalVentaRepository;
 import pe.isil.kds.repository.ConfiguracionSemaforoRepository;
 import pe.isil.kds.repository.MesaRepository;
 import pe.isil.kds.repository.PedidoRepository;
@@ -35,6 +37,10 @@ import java.util.stream.Collectors;
  * - Azul (ATENDIDA): con atención abierta y todo despachado (o anulado), aún sin liberar.
  * - Verde, amarillo o rojo: con ítems pendientes, según los minutos desde el envío a cocina del
  *   pedido pendiente más antiguo de la mesa, comparados con los umbrales configurados.
+ *
+ * D39: estos umbrales son la única configuración de tiempos de Salón. Al guardarlos se copian al canal Salón
+ * (SLA = minutos de rojo, ámbar = minutos de amarillo), así las tarjetas de salón en cocina y pase cambian de
+ * color en el mismo minuto que la mesa, y se avisa por /topic/canales para que las pantallas recalculen.
  */
 @Service
 public class SalonService {
@@ -47,16 +53,21 @@ public class SalonService {
     private final AtencionMesaRepository atencionRepository;
     private final PedidoRepository pedidoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final CanalVentaRepository canalRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public SalonService(ConfiguracionSemaforoRepository semaforoRepository, ZonaRepository zonaRepository,
                         MesaRepository mesaRepository, AtencionMesaRepository atencionRepository,
-                        PedidoRepository pedidoRepository, UsuarioRepository usuarioRepository) {
+                        PedidoRepository pedidoRepository, UsuarioRepository usuarioRepository,
+                        CanalVentaRepository canalRepository, ApplicationEventPublisher eventPublisher) {
         this.semaforoRepository = semaforoRepository;
         this.zonaRepository = zonaRepository;
         this.mesaRepository = mesaRepository;
         this.atencionRepository = atencionRepository;
         this.pedidoRepository = pedidoRepository;
         this.usuarioRepository = usuarioRepository;
+        this.canalRepository = canalRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     // --- HU047: semáforo
@@ -83,6 +94,13 @@ public class SalonService {
         c.setMinutosAmarillo(minutosAmarillo);
         c.setMinutosRojo(minutosRojo);
         ConfiguracionSemaforo guardada = semaforoRepository.save(c);
+        // D39: el canal Salón usa los mismos tiempos para sus tarjetas en cocina y pase
+        canalRepository.findByCodigo(CanalService.CODIGO_SALON).ifPresent(salon -> {
+            salon.setSlaObjetivoMinutos(guardada.getMinutosRojo());
+            salon.setUmbralAmbarMinutos(guardada.getMinutosAmarillo());
+            canalRepository.save(salon);
+            eventPublisher.publishEvent(new NotificadorKds.CanalKdsEvent(salon.getId(), salon.getCodigo()));
+        });
         return new SemaforoDto(guardada.getMinutosAmarillo(), guardada.getMinutosRojo());
     }
 

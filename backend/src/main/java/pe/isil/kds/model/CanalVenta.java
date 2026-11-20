@@ -31,6 +31,22 @@ public class CanalVenta {
     @Column(nullable = false)
     private Boolean externo = false;
 
+    // HU015: color (#RRGGBB) e ícono (Material Symbols) con los que se reconoce el canal en la tarjeta
+    @Column(length = 7)
+    private String color;
+
+    @Column(length = 40)
+    private String icono;
+
+    // HU025: porcentaje del SLA en el que el pedido pasa de verde a ámbar (rojo al llegar al 100 %)
+    @Column(name = "umbral_ambar_porcentaje", nullable = false)
+    private Integer umbralAmbarPorcentaje = 75;
+
+    // D39: ámbar en minutos exactos; solo Salón, que toma sus tiempos del semáforo de mesas (pestaña Salón).
+    // Si está definido manda sobre el porcentaje
+    @Column(name = "umbral_ambar_minutos")
+    private Integer umbralAmbarMinutos;
+
     public CanalVenta() {}
 
     public Long getId() { return id; }
@@ -50,4 +66,27 @@ public class CanalVenta {
 
     public Boolean getExterno() { return externo; }
     public void setExterno(Boolean externo) { this.externo = externo; }
+
+    public String getColor() { return color; }
+    public void setColor(String color) { this.color = color; }
+
+    public String getIcono() { return icono; }
+    public void setIcono(String icono) { this.icono = icono; }
+
+    public Integer getUmbralAmbarMinutos() { return umbralAmbarMinutos; }
+    public void setUmbralAmbarMinutos(Integer umbralAmbarMinutos) { this.umbralAmbarMinutos = umbralAmbarMinutos; }
+
+    // D39: minutos desde el ingreso en que el semáforo pasa a ámbar, sea por minutos fijos o por % del SLA
+    public Double minutosAmbar() {
+        if (umbralAmbarMinutos != null) {
+            return umbralAmbarMinutos.doubleValue();
+        }
+        if (slaObjetivoMinutos == null) {
+            return null;
+        }
+        return slaObjetivoMinutos * (umbralAmbarPorcentaje != null ? umbralAmbarPorcentaje : 75) / 100.0;
+    }
+
+    public Integer getUmbralAmbarPorcentaje() { return umbralAmbarPorcentaje; }
+    public void setUmbralAmbarPorcentaje(Integer umbralAmbarPorcentaje) { this.umbralAmbarPorcentaje = umbralAmbarPorcentaje; }
 }

@@ -50,8 +50,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *   vigente el pedido queda ANULADO y sale de las colas (Esc. 6); su total deja de contar lo anulado.
  * - Cada anulación queda en el historial con su motivo y avisa por WebSocket a la estación (Esc. 5).
  * - D36: el motivo debe corresponder al estado (pendiente o iniciado). Un ítem pendiente lo anula el mozo o el
- *   expedidor por su cuenta; uno ya iniciado (En preparación o Listo) exige usuario y contraseña de un
- *   administrador activo, salvo que quien anula ya sea administrador. Tras 5 intentos fallidos en 5 minutos se
+ *   expedidor por su cuenta; uno ya iniciado (En preparación o Listo) exige el usuario y la clave de autorización
+ *   (PIN de 6 dígitos, distinto de su contraseña) de un administrador activo, salvo que quien anula ya sea
+ *   administrador. Tras 5 intentos fallidos en 5 minutos se
  *   bloquea la autorización de ese usuario durante 5 minutos, para frenar el adivinado de la contraseña.
  */
 @Service
@@ -177,8 +178,9 @@ public class AnulacionItemService {
 
     /**
      * D36: devuelve el administrador que autoriza anular un ítem iniciado. Si quien anula ya es administrador, él
-     * mismo autoriza. Si no, valida usuario y contraseña de un administrador activo; cualquier falla responde lo
-     * mismo (sin revelar si el usuario existe) y suma un intento fallido.
+     * mismo autoriza. Si no, valida el usuario y la clave de autorización de un administrador activo; cualquier
+     * falla (incluido un administrador sin clave configurada) responde lo mismo, sin revelar si el usuario existe,
+     * y suma un intento fallido.
      */
     private Usuario autorizar(SesionKds sesion, Usuario solicitante, AnularItemRequest.Autorizacion autorizacion) {
         if (sesion.tieneRol("ADMIN")) {
@@ -191,18 +193,20 @@ public class AnulacionItemService {
                     + "administrador que anule el ítem.", AutorizacionAdminException.BLOQUEADA);
         }
         if (autorizacion == null || autorizacion.getUsuario() == null || autorizacion.getUsuario().isBlank()
-                || autorizacion.getPassword() == null || autorizacion.getPassword().isEmpty()) {
+                || autorizacion.getClave() == null || autorizacion.getClave().isEmpty()) {
             throw new AutorizacionAdminException("Cocina ya inició este ítem: para anularlo se requiere el usuario y la "
-                    + "contraseña de un administrador.", AutorizacionAdminException.REQUERIDA);
+                    + "clave de autorización de un administrador.", AutorizacionAdminException.REQUERIDA);
         }
         Optional<Usuario> admin = usuarioRepository.findByUsername(autorizacion.getUsuario().trim())
                 .filter(u -> Boolean.TRUE.equals(u.getActivo()))
                 .filter(u -> u.getRol() != null && "ADMIN".equalsIgnoreCase(u.getRol().getCodigo()))
-                .filter(u -> u.getPasswordHash() != null && passwordEncoder.matches(autorizacion.getPassword(), u.getPasswordHash()));
+                .filter(u -> u.getClaveAutorizacionHash() != null
+                        && passwordEncoder.matches(autorizacion.getClave(), u.getClaveAutorizacionHash()));
         if (admin.isEmpty()) {
             intentosFallidos.merge(clave, new IntentosFallidos(1, Instant.now()),
                     (anterior, nuevo) -> vencido(anterior) ? nuevo : new IntentosFallidos(anterior.cantidad() + 1, anterior.desde()));
-            throw new AutorizacionAdminException("Usuario o contraseña de administrador incorrectos.", AutorizacionAdminException.INVALIDA);
+            throw new AutorizacionAdminException("Usuario o clave de autorización incorrectos. Si el administrador aún no "
+                    + "tiene clave, debe crearla en Administración > Mi clave.", AutorizacionAdminException.INVALIDA);
         }
         intentosFallidos.remove(clave);
         return admin.get();

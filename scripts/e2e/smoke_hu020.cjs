@@ -6,7 +6,7 @@
 const path = require('path');
 const FRONT = path.resolve(__dirname, '../../frontend');
 const puppeteer = require(path.join(FRONT, 'node_modules/puppeteer-core'));
-const { sleep, http, login, loginCompleto, activarCanal, vaciarCola, despacharItems } = require('./lib.cjs');
+const { sleep, http, login, loginCompleto, activarCanal, vaciarCola, despacharItems, asegurarClaveAdmin, CLAVE_AUTORIZACION_PRUEBA } = require('./lib.cjs');
 
 const BASE = 'http://localhost:5173';
 const OUT = process.env.E2E_OUT || require('os').tmpdir();
@@ -46,6 +46,8 @@ const clic = (page, selector) => page.evaluate((s) => document.querySelector(s)?
     restaurarDelivery = await activarCanal('DELIVERY');
     const mozo = await login('login-pin', { username: 'angie', pin: '1234' });
     const admin = await loginCompleto('login-admin', { username: 'admin', password: 'admin123' });
+    // D36: el diálogo de anulación del expedidor pide la clave de autorización del administrador
+    await asegurarClaveAdmin(admin.token);
     const exp = await loginCompleto('login-pin', { username: 'expedidor1', pin: '9012' });
     const canales = (await http('GET', '/canales', mozo)).data;
     const delivery = canales.find((c) => c.codigo === 'DELIVERY');
@@ -237,7 +239,7 @@ const clic = (page, selector) => page.evaluate((s) => document.querySelector(s)?
     check('D36 el diálogo pide la autorización del administrador', !!(await page.$('[data-autorizacion-admin]')));
     check('D36 sin la clave del administrador no se puede confirmar', await page.$eval('[data-confirmar-anulacion]', (b) => b.disabled));
     await page.type('#anulacion-admin-usuario', 'admin');
-    await page.type('#anulacion-admin-password', 'admin123');
+    await page.type('#anulacion-admin-clave', CLAVE_AUTORIZACION_PRUEBA);
     await clic(page, '[data-confirmar-anulacion]');
     const anuladoUi = await esperar(page, (i) => document.querySelector(`[data-item-enviado="${i}"]`)?.dataset.estado === 'ANULADO', idItem, 5000);
     check('El expedidor anula el ítem desde Recientes y queda como Anulado', anuladoUi);

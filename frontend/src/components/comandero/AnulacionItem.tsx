@@ -3,7 +3,8 @@
 // - AnularItemDialog exige elegir un motivo de la lista fija (Esc. 3) y avisa si habrá merma (Esc. 2).
 // Un ítem despachado o anulado no ofrece el botón (Esc. 4); el servidor lo valida igualmente.
 // - D36: los motivos dependen de si cocina ya inició el ítem, y anular uno iniciado (En preparación o Listo)
-//   requiere usuario y contraseña de un administrador; el administrador anula sin ingresar otra clave.
+//   requiere el usuario y la clave de autorización (PIN de 6 dígitos, no su contraseña) de un administrador;
+//   el administrador anula sin ingresar otra clave.
 
 import { useQuery } from '@tanstack/react-query';
 import { type FC, useState } from 'react';
@@ -102,13 +103,14 @@ export const AnularItemDialog: FC<{
   const { user } = useAuth();
   const [motivo, setMotivo] = useState<string | null>(null);
   const [adminUsuario, setAdminUsuario] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
+  const [adminClave, setAdminClave] = useState('');
   const [enviando, setEnviando] = useState(false);
   const { item, pedido } = objetivo;
   const habraMerma = generaMerma(item.estadoItem);
   // D36: si cocina ya empezó el ítem decide un administrador; si quien anula ya lo es, no se pide otra clave
   const requiereAutorizacion = habraMerma && user?.rol !== 'ADMIN';
-  const autorizacionCompleta = !requiereAutorizacion || (adminUsuario.trim() !== '' && adminPassword !== '');
+  const autorizacionCompleta =
+    !requiereAutorizacion || (adminUsuario.trim() !== '' && /^\d{6}$/.test(adminClave));
 
   // D36: solo los motivos que tienen sentido para el estado del ítem; la lista por estado es fija y se pide una vez
   const { data: motivos = [] } = useQuery<MotivoAnulacion[]>({
@@ -127,7 +129,7 @@ export const AnularItemDialog: FC<{
         estadoActual: item.estadoItem,
         motivo,
         autorizacion: requiereAutorizacion
-          ? { usuario: adminUsuario.trim(), password: adminPassword }
+          ? { usuario: adminUsuario.trim(), clave: adminClave }
           : undefined,
       });
       showToast(
@@ -143,8 +145,8 @@ export const AnularItemDialog: FC<{
         // Sin respuesta del servidor: se mantiene el diálogo para reintentar sin perder el motivo elegido
         showToast('No se pudo anular el ítem. Revise la conexión e intente de nuevo.', 'error');
       } else if (respuesta.status === 403 && String(respuesta.data?.codigo ?? '').startsWith('AUTORIZACION_ADMIN')) {
-        // D36: clave incorrecta o bloqueada; el diálogo sigue abierto y la contraseña se borra para reintentar
-        setAdminPassword('');
+        // D36: clave incorrecta o bloqueada; el diálogo sigue abierto y la clave se borra para reintentar
+        setAdminClave('');
         showToast(
           respuesta.data?.mensaje ?? 'No se pudo validar la autorización del administrador.',
           respuesta.data?.codigo === 'AUTORIZACION_ADMIN_BLOQUEADA' ? 'error' : 'warning',
@@ -223,7 +225,7 @@ export const AnularItemDialog: FC<{
             : 'Aún no se inició: se retira de la estación sin registrar merma.'}
         </p>
 
-        {/* D36: el administrador ingresa su usuario y contraseña en este mismo equipo para autorizar */}
+        {/* D36: el administrador ingresa su usuario y su clave de autorización en este mismo equipo */}
         {requiereAutorizacion && (
           <fieldset data-autorizacion-admin className="flex flex-col gap-2">
             <legend className="text-xs font-bold uppercase text-on-surface-variant mb-1">
@@ -240,13 +242,14 @@ export const AnularItemDialog: FC<{
               className="w-full bg-surface-container-low text-sm font-medium px-3 py-2.5 rounded-lg border border-surface-container-high focus:outline-none focus:ring-2 focus:ring-primary"
             />
             <input
-              id="anulacion-admin-password"
+              id="anulacion-admin-clave"
               type="password"
-              value={adminPassword}
-              maxLength={100}
-              autoComplete="new-password"
-              onChange={(e) => setAdminPassword(e.target.value)}
-              placeholder="Contraseña"
+              inputMode="numeric"
+              value={adminClave}
+              maxLength={6}
+              autoComplete="off"
+              onChange={(e) => setAdminClave(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="Clave de autorización (6 dígitos)"
               className="w-full bg-surface-container-low text-sm font-medium px-3 py-2.5 rounded-lg border border-surface-container-high focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </fieldset>

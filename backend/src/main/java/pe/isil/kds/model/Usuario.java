@@ -31,6 +31,11 @@ public class Usuario {
     @Column(name = "pin_hash")
     private String pinHash;
 
+    // HU049 (D36): PIN de 6 dígitos del administrador para autorizar anulaciones; distinto de su contraseña
+    @JsonIgnore
+    @Column(name = "clave_autorizacion_hash")
+    private String claveAutorizacionHash;
+
     @Column(nullable = false, length = 80)
     private String nombre;
 
@@ -66,6 +71,9 @@ public class Usuario {
 
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
+
+    public String getClaveAutorizacionHash() { return claveAutorizacionHash; }
+    public void setClaveAutorizacionHash(String claveAutorizacionHash) { this.claveAutorizacionHash = claveAutorizacionHash; }
 
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }

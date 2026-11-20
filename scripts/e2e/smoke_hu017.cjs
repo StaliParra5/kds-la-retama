@@ -5,7 +5,7 @@
 const path = require('path');
 const FRONT = path.resolve(__dirname, '../../frontend');
 const puppeteer = require(path.join(FRONT, 'node_modules/puppeteer-core'));
-const { sleep, http, login, loginCompleto, activarCanal, vaciarCola, despacharItems } = require('./lib.cjs');
+const { sleep, http, login, loginCompleto, activarCanal, vaciarCola, despacharItems, asegurarClaveAdmin } = require('./lib.cjs');
 
 const BASE = 'http://localhost:5173';
 const OUT = process.env.E2E_OUT || require('os').tmpdir();
@@ -170,7 +170,7 @@ async function tardanza(page, fn, arg, ms = 4000) {
     check('El cocinero inicia el ítem que luego se anulará', inicio4.status === 200, String(inicio4.status));
     await esperar(A, (i) => document.querySelector(`li[data-item="${i}"]`)?.dataset.estado === 'EN_PREPARACION', item4);
     // D36: el ítem ya está en preparación, así que la anulación lleva la autorización del administrador
-    const anulacion = await http('POST', `/items/${item4}/anulacion`, mozo, { estadoActual: 'EN_PREPARACION', motivo: 'DEMORA_EXCESIVA', autorizacion: { usuario: 'admin', password: 'admin123' } });
+    const anulacion = await http('POST', `/items/${item4}/anulacion`, mozo, { estadoActual: 'EN_PREPARACION', motivo: 'DEMORA_EXCESIVA', autorizacion: await asegurarClaveAdmin(admin.token) });
     check('El mozo anula el ítem en preparación', anulacion.status === 200, String(anulacion.status));
     const [msAnulA, msAnulB] = await Promise.all([
       tardanza(A, (c) => !document.querySelector(`article[data-pedido="${c}"]`), p4.codigoCorrelativo),

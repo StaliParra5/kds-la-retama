@@ -41,6 +41,12 @@ public class ItemCocinaDto {
     private String numeroOrdenExterno;
     // HU021 Esc. 3: zona de la mesa, para que el destino de un pedido de salón diga zona y mesa
     private String zonaNombre;
+    // HU015: color e ícono del canal para la franja de la tarjeta; HU025: umbral ámbar del canal
+    private String canalColor;
+    private String canalIcono;
+    private Integer canalUmbralAmbar;
+    // D39: minutos en que el semáforo pasa a ámbar ya calculados (Salón: minutos de amarillo de la pestaña Salón)
+    private Double canalAmbarMinutos;
     // HU021 Esc. 4: 0 = comanda original; 1, 2... = adiciones enviadas después a la misma mesa
     private Integer numeroAdicion;
     // HU021 Esc. 6: envío a cocina como instante absoluto (ms desde 1970): no depende de la zona horaria de la PC
@@ -110,6 +116,18 @@ public class ItemCocinaDto {
 
     public Integer getItemsEnOtrasEstaciones() { return itemsEnOtrasEstaciones; }
     public void setItemsEnOtrasEstaciones(Integer itemsEnOtrasEstaciones) { this.itemsEnOtrasEstaciones = itemsEnOtrasEstaciones; }
+
+    public String getCanalColor() { return canalColor; }
+    public void setCanalColor(String canalColor) { this.canalColor = canalColor; }
+
+    public String getCanalIcono() { return canalIcono; }
+    public void setCanalIcono(String canalIcono) { this.canalIcono = canalIcono; }
+
+    public Double getCanalAmbarMinutos() { return canalAmbarMinutos; }
+    public void setCanalAmbarMinutos(Double canalAmbarMinutos) { this.canalAmbarMinutos = canalAmbarMinutos; }
+
+    public Integer getCanalUmbralAmbar() { return canalUmbralAmbar; }
+    public void setCanalUmbralAmbar(Integer canalUmbralAmbar) { this.canalUmbralAmbar = canalUmbralAmbar; }
 
     public String getZonaNombre() { return zonaNombre; }
     public void setZonaNombre(String zonaNombre) { this.zonaNombre = zonaNombre; }

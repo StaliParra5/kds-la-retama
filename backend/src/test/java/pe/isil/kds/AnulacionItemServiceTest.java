@@ -62,8 +62,9 @@ class AnulacionItemServiceTest {
 
     // Costo mínimo de BCrypt solo para que las pruebas sean rápidas; producción usa costo 12
     private static final BCryptPasswordEncoder ENCODER = new BCryptPasswordEncoder(4);
-    private static final String HASH_ADMIN = ENCODER.encode("admin123");
-    private static final AnularItemRequest.Autorizacion CLAVE_ADMIN = new AnularItemRequest.Autorizacion("admin", "admin123");
+    // D36: clave de autorización (PIN de 6 dígitos) distinta de la contraseña de la cuenta
+    private static final String HASH_ADMIN = ENCODER.encode("246810");
+    private static final AnularItemRequest.Autorizacion CLAVE_ADMIN = new AnularItemRequest.Autorizacion("admin", "246810");
 
     private final SesionKds sesionMozo = new SesionKds("angie", "MOZO", null);
     private final SesionKds sesionAdmin = new SesionKds("admin", "ADMIN", null);
@@ -87,7 +88,8 @@ class AnulacionItemServiceTest {
         // D36: administrador activo con contraseña, para autorizar la anulación de ítems iniciados
         admin.setRol(new Rol(1L, "ADMIN", "Administrador", null));
         admin.setActivo(true);
-        admin.setPasswordHash(HASH_ADMIN);
+        admin.setPasswordHash(ENCODER.encode("admin123"));
+        admin.setClaveAutorizacionHash(HASH_ADMIN);
 
         CanalVenta delivery = new CanalVenta();
         delivery.setId(3L);
@@ -357,25 +359,27 @@ class AnulacionItemServiceTest {
     }
 
     @Test
-    @DisplayName("D36: Una contraseña incorrecta, un usuario que no es administrador o uno inactivo no autorizan")
+    @DisplayName("D36: Una clave incorrecta, la contraseña de la cuenta, un usuario que no es administrador o uno inactivo no autorizan")
     void autorizacionInvalida_SeRechaza() {
         lomo.setEstadoItem(EstadoItem.EN_PREPARACION);
         Usuario cocinero = usuario(50L, "cocinero1", "Cocinero", "Uno");
         cocinero.setRol(new Rol(3L, "COCINERO", "Cocinero", null));
         cocinero.setActivo(true);
-        cocinero.setPasswordHash(HASH_ADMIN);
+        cocinero.setClaveAutorizacionHash(HASH_ADMIN);
         when(usuarioRepository.findByUsername("cocinero1")).thenReturn(Optional.of(cocinero));
         when(usuarioRepository.findByUsername("nadie")).thenReturn(Optional.empty());
 
         for (AnularItemRequest.Autorizacion clave : List.of(
-                new AnularItemRequest.Autorizacion("admin", "otra"),
-                new AnularItemRequest.Autorizacion("cocinero1", "admin123"),
-                new AnularItemRequest.Autorizacion("nadie", "admin123"))) {
+                new AnularItemRequest.Autorizacion("admin", "135790"),
+                // La contraseña de la cuenta no sirve como clave de autorización
+                new AnularItemRequest.Autorizacion("admin", "admin123"),
+                new AnularItemRequest.Autorizacion("cocinero1", "246810"),
+                new AnularItemRequest.Autorizacion("nadie", "246810"))) {
             AutorizacionAdminException ex = assertThrows(AutorizacionAdminException.class, () -> service.anular(10L,
                     new AnularItemRequest(EstadoItem.EN_PREPARACION, MotivoAnulacion.PLATO_CON_DEFECTO, clave), sesionMozo));
             // Mismo mensaje en los tres casos: no revela si el usuario existe
             assertEquals(AutorizacionAdminException.INVALIDA, ex.getCodigo(), clave.toString());
-            assertEquals("Usuario o contraseña de administrador incorrectos.", ex.getMessage());
+            assertTrue(ex.getMessage().startsWith("Usuario o clave de autorización incorrectos."), ex.getMessage());
         }
 
         admin.setActivo(false);
@@ -385,7 +389,21 @@ class AnulacionItemServiceTest {
     }
 
     @Test
-    @DisplayName("D36: Tras 5 intentos fallidos la autorización se bloquea, aunque luego se dé la contraseña correcta")
+    @DisplayName("D36: Un administrador que aún no configuró su clave de autorización no puede autorizar")
+    void adminSinClave_NoAutoriza() {
+        lomo.setEstadoItem(EstadoItem.EN_PREPARACION);
+        admin.setClaveAutorizacionHash(null);
+
+        AutorizacionAdminException ex = assertThrows(AutorizacionAdminException.class, () -> service.anular(10L,
+                new AnularItemRequest(EstadoItem.EN_PREPARACION, MotivoAnulacion.PLATO_CON_DEFECTO, CLAVE_ADMIN), sesionMozo));
+
+        assertEquals(AutorizacionAdminException.INVALIDA, ex.getCodigo());
+        assertTrue(ex.getMessage().contains("Mi clave"));
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("D36: Tras 5 intentos fallidos la autorización se bloquea, aunque luego se dé la clave correcta")
     void autorizacion_SeBloqueaTrasCincoFallos() {
         lomo.setEstadoItem(EstadoItem.EN_PREPARACION);
         AnularItemRequest incorrecta = new AnularItemRequest(EstadoItem.EN_PREPARACION, MotivoAnulacion.PLATO_CON_DEFECTO,

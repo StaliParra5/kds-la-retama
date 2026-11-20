@@ -11,6 +11,8 @@ import pe.isil.kds.dto.SalonDto;
 import pe.isil.kds.dto.SemaforoDto;
 import pe.isil.kds.model.*;
 import pe.isil.kds.repository.*;
+import org.springframework.context.ApplicationEventPublisher;
+import pe.isil.kds.service.NotificadorKds;
 import pe.isil.kds.service.SalonService;
 
 import java.time.LocalDateTime;
@@ -42,6 +44,13 @@ class SalonServiceTest {
 
     @Mock
     private UsuarioRepository usuarioRepository;
+
+    // D39: al guardar el semáforo de mesas se actualiza el canal Salón y se avisa a las pantallas
+    @Mock
+    private CanalVentaRepository canalRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private SalonService salonService;
@@ -132,6 +141,26 @@ class SalonServiceTest {
     }
 
     @Test
+    @DisplayName("D39: Los minutos del semáforo de mesas se copian al canal Salón (SLA = rojo, ámbar = amarillo) y se avisa")
+    void semaforo_SincronizaElCanalSalon() {
+        CanalVenta salon = new CanalVenta();
+        salon.setId(1L);
+        salon.setCodigo("SALON");
+        salon.setSlaObjetivoMinutos(15);
+        when(semaforoRepository.findById(ConfiguracionSemaforo.ID_UNICO)).thenReturn(Optional.of(new ConfiguracionSemaforo()));
+        when(semaforoRepository.save(any(ConfiguracionSemaforo.class))).thenAnswer(i -> i.getArgument(0));
+        when(canalRepository.findByCodigo("SALON")).thenReturn(Optional.of(salon));
+
+        salonService.actualizarSemaforo(20, 30);
+
+        assertEquals(30, salon.getSlaObjetivoMinutos());
+        assertEquals(20, salon.getUmbralAmbarMinutos());
+        assertEquals(20.0, salon.minutosAmbar());
+        verify(canalRepository).save(salon);
+        verify(eventPublisher).publishEvent(new NotificadorKds.CanalKdsEvent(1L, "SALON"));
+    }
+
+    @Test
     @DisplayName("HU047 Escenario 3: Amarillo no mayor que cero o rojo no mayor que amarillo se rechaza indicando la regla")
     void semaforo_Invalido() {
         IllegalArgumentException cero = assertThrows(IllegalArgumentException.class, () -> salonService.actualizarSemaforo(0, 10));
@@ -139,6 +168,7 @@ class SalonServiceTest {
         IllegalArgumentException rojo = assertThrows(IllegalArgumentException.class, () -> salonService.actualizarSemaforo(20, 20));
         assertTrue(rojo.getMessage().contains("rojo"));
         verify(semaforoRepository, never()).save(any());
+        verify(canalRepository, never()).save(any());
     }
 
     // --- HU048 Escenario 2: colores

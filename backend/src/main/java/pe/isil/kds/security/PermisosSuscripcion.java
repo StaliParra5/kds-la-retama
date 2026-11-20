@@ -33,7 +33,8 @@ public final class PermisosSuscripcion {
         }
         return switch (destino) {
             case "/topic/items" -> sesion.tieneRol("ADMIN", "EXPEDIDOR");
-            case "/topic/pedidos", "/topic/platos" -> true;
+            // /topic/canales (HU025): cambios de SLA, umbral y apariencia de canales; no contiene datos de pedidos
+            case "/topic/pedidos", "/topic/platos", "/topic/canales" -> true;
             default -> false;
         };
     }

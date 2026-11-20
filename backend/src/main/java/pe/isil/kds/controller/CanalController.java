@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import pe.isil.kds.dto.ActualizarAparienciaCanalRequest;
 import pe.isil.kds.dto.ActualizarSlaRequest;
 import pe.isil.kds.dto.CambiarEstadoCanalRequest;
 import pe.isil.kds.dto.CanalDto;
@@ -49,13 +50,22 @@ public class CanalController {
         return ResponseEntity.ok(canalService.cambiarEstado(id, request.getActivo()));
     }
 
-    @Operation(summary = "Actualizar el tiempo SLA de un canal de venta (Admin)")
+    @Operation(summary = "Actualizar el SLA de un canal y, opcionalmente, su umbral ámbar en % del SLA (HU037, HU025, Admin)")
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}/sla")
     public ResponseEntity<CanalDto> actualizarSla(
             @PathVariable Long id,
             @Valid @RequestBody ActualizarSlaRequest request) {
-        CanalDto actualizado = canalService.actualizarSla(id, request.getSlaObjetivoMinutos());
+        CanalDto actualizado = canalService.actualizarSla(id, request.getSlaObjetivoMinutos(), request.getUmbralAmbarPorcentaje());
         return ResponseEntity.ok(actualizado);
+    }
+
+    @Operation(summary = "Cambiar el color y el ícono de un canal; el color no puede parecerse al semáforo ni a otro canal activo (HU015, Admin)")
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/{id}/apariencia")
+    public ResponseEntity<CanalDto> actualizarApariencia(
+            @PathVariable Long id,
+            @Valid @RequestBody ActualizarAparienciaCanalRequest request) {
+        return ResponseEntity.ok(canalService.actualizarApariencia(id, request.getColor(), request.getIcono()));
     }
 }

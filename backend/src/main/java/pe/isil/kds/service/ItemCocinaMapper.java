@@ -36,6 +36,13 @@ public final class ItemCocinaMapper {
         dto.setCanalCodigo(pedido.getCanal().getCodigo());
         dto.setCanalNombre(pedido.getCanal().getNombre());
         dto.setCanalSlaMinutos(pedido.getCanal().getSlaObjetivoMinutos());
+        // HU015: la tarjeta usa el mismo color e ícono configurados en el canal (estación y pase iguales, Esc. 3 y 5)
+        dto.setCanalColor(pedido.getCanal().getColor());
+        dto.setCanalIcono(pedido.getCanal().getIcono());
+        // HU025: umbral ámbar del canal para el semáforo de la tarjeta
+        dto.setCanalUmbralAmbar(pedido.getCanal().getUmbralAmbarPorcentaje());
+        // D39: el servidor resuelve el minuto del ámbar (Salón en minutos fijos, el resto por % del SLA)
+        dto.setCanalAmbarMinutos(pedido.getCanal().minutosAmbar());
         dto.setMesaNumero(pedido.getMesa() != null ? pedido.getMesa().getNumeroMesa() : null);
         // HU021 Esc. 3: zona de la mesa para el destino; la zona se carga por lotes (default_batch_fetch_size), sin N+1
         dto.setZonaNombre(pedido.getMesa() != null && pedido.getMesa().getZona() != null
