@@ -19,6 +19,7 @@ import pe.isil.kds.repository.PedidoRepository;
 import pe.isil.kds.repository.UsuarioRepository;
 import pe.isil.kds.security.SesionKds;
 import pe.isil.kds.service.CicloVidaItemService;
+import pe.isil.kds.service.ConfiguracionCocinaService;
 import pe.isil.kds.service.NotificadorKds;
 import pe.isil.kds.service.TrazabilidadService;
 
@@ -47,6 +48,10 @@ class CicloVidaItemServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    // HU033: ventana para deshacer (30 s, como la de fábrica)
+    @Mock
+    private ConfiguracionCocinaService configuracionCocina;
 
     @InjectMocks
     private CicloVidaItemService service;
@@ -82,6 +87,7 @@ class CicloVidaItemServiceTest {
 
         lenient().when(detalleRepository.findPedidoIdById(anyLong())).thenReturn(Optional.of(99L));
         lenient().when(pedidoRepository.bloquearPorId(99L)).thenReturn(Optional.of(pedido));
+        lenient().when(configuracionCocina.ventanaRecallSegundos()).thenReturn(30);
     }
 
     @Test
@@ -275,6 +281,100 @@ class CicloVidaItemServiceTest {
 
         assertEquals("ANULADO", ex.getItemActual().getEstado());
         assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("HU033 Escenario 1: Dentro de la ventana, deshacer devuelve el ítem a su estado anterior y queda en el historial")
+    void deshacer_DentroDeLaVentana() {
+        when(detalleRepository.findById(10L)).thenReturn(Optional.of(lomo));
+        service.cambiarEstado(10L, req(EstadoItem.RECIBIDO, EstadoItem.EN_PREPARACION), cocineroPlancha);
+        assertEquals(EstadoItem.RECIBIDO, lomo.getEstadoPrevio());
+        assertNotNull(lomo.getUltimoCambioEn());
+        clearInvocations(trazabilidadService, eventPublisher);
+
+        ItemCocinaDto dto = service.deshacerCambio(10L, EstadoItem.EN_PREPARACION, cocineroPlancha);
+
+        assertEquals("RECIBIDO", dto.getEstado());
+        assertNull(lomo.getEstadoPrevio());
+        assertNull(lomo.getUltimoCambioEn());
+        verify(trazabilidadService).registrarItem(eq(lomo), eq("EN_PREPARACION"), eq("RECIBIDO"), any(),
+                eq("Recall: se deshizo el último cambio"));
+        verify(eventPublisher).publishEvent(any(NotificadorKds.ItemsKdsEvent.class));
+    }
+
+    @Test
+    @DisplayName("HU033 Escenario 3: Solo se revierte el último cambio: Listo vuelve a En preparación y no se puede deshacer otra vez")
+    void deshacer_SoloElUltimoCambio() {
+        when(detalleRepository.findById(10L)).thenReturn(Optional.of(lomo));
+        service.cambiarEstado(10L, req(EstadoItem.RECIBIDO, EstadoItem.EN_PREPARACION), cocineroPlancha);
+        service.cambiarEstado(10L, req(EstadoItem.EN_PREPARACION, EstadoItem.LISTO), cocineroPlancha);
+
+        assertEquals("EN_PREPARACION", service.deshacerCambio(10L, EstadoItem.LISTO, cocineroPlancha).getEstado());
+
+        OperacionNoPermitidaException ex = assertThrows(OperacionNoPermitidaException.class,
+                () -> service.deshacerCambio(10L, EstadoItem.EN_PREPARACION, cocineroPlancha));
+        assertEquals(OperacionNoPermitidaException.RECALL_NO_DISPONIBLE, ex.getCodigo());
+        assertEquals(EstadoItem.EN_PREPARACION, lomo.getEstadoItem());
+    }
+
+    @Test
+    @DisplayName("HU033 Escenarios 2 y 4: Fuera de la ventana configurada no se puede deshacer")
+    void deshacer_FueraDeLaVentana() {
+        lomo.setEstadoItem(EstadoItem.EN_PREPARACION);
+        lomo.setEstadoPrevio(EstadoItem.RECIBIDO);
+        lomo.setUltimoCambioEn(LocalDateTime.now().minusSeconds(40));
+        when(detalleRepository.findById(10L)).thenReturn(Optional.of(lomo));
+
+        OperacionNoPermitidaException ex = assertThrows(OperacionNoPermitidaException.class,
+                () -> service.deshacerCambio(10L, EstadoItem.EN_PREPARACION, cocineroPlancha));
+
+        assertEquals(OperacionNoPermitidaException.RECALL_VENCIDO, ex.getCodigo());
+        assertTrue(ex.getMessage().contains("30 segundos"), ex.getMessage());
+        assertSinCambios();
+    }
+
+    @Test
+    @DisplayName("HU033 Escenario 5: Un ítem despachado no se puede deshacer, y despachar borra el cambio pendiente")
+    void deshacer_Despachado() {
+        when(detalleRepository.findById(10L)).thenReturn(Optional.of(lomo));
+        lomo.setEstadoItem(EstadoItem.EN_PREPARACION);
+        service.cambiarEstado(10L, req(EstadoItem.EN_PREPARACION, EstadoItem.LISTO), cocineroPlancha);
+        service.cambiarEstado(10L, req(EstadoItem.LISTO, EstadoItem.DESPACHADO), expedidor);
+        assertNull(lomo.getEstadoPrevio());
+
+        OperacionNoPermitidaException ex = assertThrows(OperacionNoPermitidaException.class,
+                () -> service.deshacerCambio(10L, EstadoItem.DESPACHADO, cocineroPlancha));
+        assertEquals(OperacionNoPermitidaException.RECALL_NO_DISPONIBLE, ex.getCodigo());
+        assertEquals(EstadoItem.DESPACHADO, lomo.getEstadoItem());
+    }
+
+    @Test
+    @DisplayName("HU033: Solo deshace la cocina de la estación del ítem o el administrador; con estado desactualizado responde 409")
+    void deshacer_PermisosYEstadoDesactualizado() {
+        lomo.setEstadoItem(EstadoItem.EN_PREPARACION);
+        lomo.setEstadoPrevio(EstadoItem.RECIBIDO);
+        lomo.setUltimoCambioEn(LocalDateTime.now());
+        when(detalleRepository.findById(10L)).thenReturn(Optional.of(lomo));
+
+        assertThrows(AccessDeniedException.class, () -> service.deshacerCambio(10L, EstadoItem.EN_PREPARACION, expedidor));
+        assertThrows(AccessDeniedException.class,
+                () -> service.deshacerCambio(10L, EstadoItem.EN_PREPARACION, new SesionKds("cocinero2", "COCINERO", 2L)));
+        assertThrows(EstadoDesactualizadoException.class, () -> service.deshacerCambio(10L, EstadoItem.LISTO, cocineroPlancha));
+        assertSinCambios();
+
+        // El administrador sí puede, y un cocinero de la misma estación (otra pantalla) también
+        assertEquals("RECIBIDO", service.deshacerCambio(10L, EstadoItem.EN_PREPARACION, admin).getEstado());
+    }
+
+    @Test
+    @DisplayName("HU033: Un ítem que salió de En espera vuelve a En espera al deshacer")
+    void deshacer_VuelveAEnEspera() {
+        lomo.setEstadoItem(EstadoItem.EN_PREPARACION);
+        lomo.setEstadoPrevio(EstadoItem.EN_ESPERA);
+        lomo.setUltimoCambioEn(LocalDateTime.now().minusSeconds(5));
+        when(detalleRepository.findById(10L)).thenReturn(Optional.of(lomo));
+
+        assertEquals("EN_ESPERA", service.deshacerCambio(10L, EstadoItem.EN_PREPARACION, cocineroPlancha).getEstado());
     }
 
     private void assertSinCambios() {

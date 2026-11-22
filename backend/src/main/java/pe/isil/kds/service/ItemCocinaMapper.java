@@ -43,6 +43,10 @@ public final class ItemCocinaMapper {
         dto.setCanalUmbralAmbar(pedido.getCanal().getUmbralAmbarPorcentaje());
         // D39: el servidor resuelve el minuto del ámbar (Salón en minutos fijos, el resto por % del SLA)
         dto.setCanalAmbarMinutos(pedido.getCanal().minutosAmbar());
+        // HU033: la pantalla muestra "Deshacer" con cuenta regresiva desde este instante (la ventana la valida el servidor)
+        dto.setEstadoPrevio(item.getEstadoPrevio() != null ? item.getEstadoPrevio().name() : null);
+        dto.setUltimoCambioEpochMs(item.getUltimoCambioEn() != null
+                ? item.getUltimoCambioEn().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() : null);
         dto.setMesaNumero(pedido.getMesa() != null ? pedido.getMesa().getNumeroMesa() : null);
         // HU021 Esc. 3: zona de la mesa para el destino; la zona se carga por lotes (default_batch_fetch_size), sin N+1
         dto.setZonaNombre(pedido.getMesa() != null && pedido.getMesa().getZona() != null

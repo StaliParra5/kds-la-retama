@@ -9,6 +9,9 @@ public class OperacionNoPermitidaException extends RuntimeException {
 
     // HU014 Esc. 3: el ítem está retenido hasta su hora de disparo y falta la confirmación
     public static final String INICIO_ANTICIPADO_REQUERIDO = "INICIO_ANTICIPADO_REQUERIDO";
+    // HU033: no hay un cambio reciente que deshacer, o ya pasó la ventana para hacerlo
+    public static final String RECALL_NO_DISPONIBLE = "RECALL_NO_DISPONIBLE";
+    public static final String RECALL_VENCIDO = "RECALL_VENCIDO";
 
     private final String codigo;
 

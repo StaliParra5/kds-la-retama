@@ -4,6 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useState } from 'react';
 import { apiClient } from '../api/client';
+import { VentanaRecallConfig } from '../components/cocina/VentanaRecallConfig';
 import { LaRetamaWatermark } from '../components/common/LaRetamaWatermark';
 import { TopAppBar } from '../components/common/TopAppBar';
 import { useAuth } from '../context/AuthContext';
@@ -118,6 +119,9 @@ export const AdminEstacionesPage: React.FC = () => {
             <span>NUEVA ESTACIÓN</span>
           </button>
         </div>
+
+        {/* HU033: ventana para deshacer cambios de estado en cocina (sin pestaña nueva en la barra superior) */}
+        <VentanaRecallConfig />
 
         {/* Tarjetas de Estaciones Operativas */}
         {isLoading ? (

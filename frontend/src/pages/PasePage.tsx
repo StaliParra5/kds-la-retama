@@ -13,6 +13,7 @@ import { useRecargaAgrupada, useTiempoReal } from '../api/tiempoReal';
 import { CanalFranja } from '../components/cocina/CanalFranja';
 import { Cronometro } from '../components/cocina/Cronometro';
 import { TarjetaSemaforo } from '../components/cocina/TarjetaSemaforo';
+import { IndicadorConexion } from '../components/common/IndicadorConexion';
 import { TopAppBar } from '../components/common/TopAppBar';
 import { useToast } from '../context/ToastContext';
 import type { ItemCocina } from '../types';
@@ -143,18 +144,8 @@ export const PasePage: React.FC = () => {
               {listos.length} {listos.length === 1 ? 'ítem' : 'ítems'} · {grupos.length}{' '}
               {grupos.length === 1 ? 'pedido' : 'pedidos'}
             </span>
-            <span
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border ${
-                conectado
-                  ? 'bg-secondary/10 text-secondary border-secondary/30'
-                  : 'bg-error/10 text-error border-error/30'
-              }`}
-            >
-              <span
-                className={`w-2 h-2 rounded-full ${conectado ? 'bg-secondary animate-pulse' : 'bg-error'}`}
-              />
-              {conectado ? 'En vivo' : rechazo ? 'Sin conexión' : 'Reconectando…'}
-            </span>
+            {/* HU038 Esc. 5 y 6: misma insignia de conexión que la estación; el pase no se bloquea (sus acciones se reintentan) */}
+            <IndicadorConexion conectado={conectado} />
           </div>
         </div>
       </div>

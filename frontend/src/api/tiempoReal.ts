@@ -49,9 +49,13 @@ export const useTiempoReal = ({
     let sesionAceptada = false;
     const cliente = new Client({
       brokerURL: urlWebSocket(),
+      // HU038 Esc. 3: reintenta conectarse cada 3 s sin intervención
       reconnectDelay: 3000,
-      heartbeatIncoming: 10000,
-      heartbeatOutgoing: 10000,
+      // HU038 Esc. 1: latidos cada 1,5 s (igual que el servidor, WebSocketConfig.LATIDO_MS); si dejan de llegar,
+      // la conexión se da por caída en unos 3 a 4,5 s y se cierra de inmediato para reintentar
+      heartbeatIncoming: 1500,
+      heartbeatOutgoing: 1500,
+      discardWebsocketOnCommFailure: true,
       // El token se lee en cada intento: tras un nuevo login la reconexión usa el vigente
       beforeConnect: (c) => {
         sesionAceptada = false;
@@ -97,8 +101,14 @@ export const useTiempoReal = ({
       },
     });
     cliente.activate();
+    // HU038 Esc. 1: si la PC pierde la red el navegador lo avisa al instante; no se espera a los latidos
+    const alPerderRed = () => {
+      if (activo) setConectado(false);
+    };
+    window.addEventListener('offline', alPerderRed);
     return () => {
       activo = false;
+      window.removeEventListener('offline', alPerderRed);
       setConectado(false);
       void cliente.deactivate();
     };

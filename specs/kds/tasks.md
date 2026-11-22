@@ -427,3 +427,12 @@
   - Pruebas: `CanalServiceTest`, `PermisosSuscripcionTest`; smoke `smoke_hu025.cjs` (dura poco más de 1 minuto).
   - Ajuste D39 (2026-11-18): un solo semáforo para Salón. Migración `V24__salon_semaforo_unico.sql` (`canales_venta.umbral_ambar_minutos`, Salón toma los minutos de `configuracion_semaforo`); `SalonService.actualizarSemaforo` copia los minutos al canal Salón y avisa; `CanalService` rechaza cambiar el SLA de Salón; `ItemCocinaDto.canalAmbarMinutos` (minuto ámbar resuelto en el servidor); `AdminCanalesPage` muestra un aviso con enlace a Salón. Pruebas: `SalonServiceTest`, `CanalServiceTest`, `ItemCocinaMapperTest` y el caso de Salón en `smoke_hu025.cjs`.
 
+- [ ] **TASK-080 [FULL] [F2] Deshacer el último cambio de estado (HU033, D41)** — implementado, pendiente de verificar build, pruebas y flujo en vivo
+  - Backend: migración `V25__recall.sql` (`configuracion_cocina.ventana_recall_segundos` y `detalles_pedido.estado_previo` / `ultimo_cambio_en`); `ConfiguracionCocina`, `ConfiguracionCocinaRepository`, `ConfiguracionCocinaService` y `ConfiguracionCocinaController` (`GET/PUT /api/v1/configuracion/cocina`); `CicloVidaItemService.deshacerCambio` y `POST /api/v1/items/{id}/recall` (`DeshacerCambioRequest`); códigos `RECALL_NO_DISPONIBLE` y `RECALL_VENCIDO`; `ItemCocinaDto.estadoPrevio` y `ultimoCambioEpochMs`.
+  - Frontend: `components/cocina/BotonDeshacer.tsx` (tiempo restante debajo del botón), `CocinaPage` (deshacer y ítem Listo visible toda la ventana), `components/cocina/VentanaRecallConfig.tsx` en `AdminEstacionesPage`.
+  - Pruebas: `CicloVidaItemServiceTest`, `ConfiguracionCocinaServiceTest`; smoke `smoke_hu033.cjs`.
+
+- [ ] **TASK-081 [FULL] [F2] Indicador de conexión y reconexión automática (HU038, D42)** — implementado, pendiente de verificar build, pruebas y flujo en vivo
+  - Backend: `WebSocketConfig` con latidos STOMP cada 1,5 s (planificador propio del broker simple).
+  - Frontend: `api/tiempoReal.ts` (latidos 1,5 s, cierre inmediato ante falla, evento `offline`, reintento cada 3 s); `components/common/IndicadorConexion.tsx` (insignia "En vivo / Sin conexión con el servidor / Conectado", reemplaza la anterior de estación y pase y se agrega al comandero); `CocinaPage` bloquea iniciar, listo y deshacer sin conexión.
+  - Pruebas: smoke `smoke_hu038.cjs` (modo sin conexión de Chrome en las tres vistas).

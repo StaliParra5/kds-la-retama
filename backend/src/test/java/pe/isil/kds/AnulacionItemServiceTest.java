@@ -25,6 +25,7 @@ import pe.isil.kds.repository.UsuarioRepository;
 import pe.isil.kds.security.SesionKds;
 import pe.isil.kds.service.AnulacionItemService;
 import pe.isil.kds.service.CicloVidaItemService;
+import pe.isil.kds.service.ConfiguracionCocinaService;
 import pe.isil.kds.service.NotificadorKds;
 import pe.isil.kds.service.TrazabilidadService;
 
@@ -57,6 +58,8 @@ class AnulacionItemServiceTest {
     private TrazabilidadService trazabilidadService;
     @Mock
     private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private ConfiguracionCocinaService configuracionCocina;
 
     private AnulacionItemService service;
 
@@ -79,7 +82,7 @@ class AnulacionItemServiceTest {
     void setUp() {
         // Se usa el servicio de ciclo de vida real: el estado del pedido se deriva con su misma lógica
         CicloVidaItemService cicloVida = new CicloVidaItemService(
-                detalleRepository, pedidoRepository, usuarioRepository, trazabilidadService, eventPublisher);
+                detalleRepository, pedidoRepository, usuarioRepository, trazabilidadService, eventPublisher, configuracionCocina);
         service = new AnulacionItemService(detalleRepository, pedidoRepository, usuarioRepository,
                 mermaRepository, trazabilidadService, cicloVida, eventPublisher, ENCODER);
 

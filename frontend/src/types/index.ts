@@ -219,6 +219,9 @@ export interface ItemCocina {
   canalUmbralAmbar?: number | null;
   // D39: minuto en que pasa a ámbar ya resuelto por el servidor (Salón: amarillo de la pestaña Salón)
   canalAmbarMinutos?: number | null;
+  // HU033: último cambio que se puede deshacer (estado al que vuelve e instante del cambio)
+  estadoPrevio?: EstadoItem | null;
+  ultimoCambioEpochMs?: number | null;
   envioCocinaEpochMs?: number | null;
   id: number;
   version: number;

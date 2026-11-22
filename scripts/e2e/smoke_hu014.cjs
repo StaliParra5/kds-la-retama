@@ -29,8 +29,15 @@ const textoVisible = (page, texto) => esperar(page, (t) => document.body.innerTe
     executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: 'new',
   });
   const errors = [];
+  // HU033: un ítem marcado Listo en esta pantalla sigue visible toda la ventana para deshacer (30 s por defecto);
+  // para esta prueba se acorta a 5 s y al final se deja como estaba
+  let admin = null;
+  let ventanaOriginal = null;
 
   try {
+    admin = await loginCompleto('login-admin', { username: 'admin', password: 'admin123' });
+    ventanaOriginal = (await http('GET', '/configuracion/cocina', admin.token)).data?.ventanaRecallSegundos ?? null;
+    await http('PUT', '/configuracion/cocina', admin.token, { ventanaRecallSegundos: 5 });
     const mozo = await login('login-pin', { username: 'angie', pin: '1234' });
     const estaciones = (await http('GET', '/estaciones', mozo)).data;
     const idFrios = estaciones.find((e) => e.codigo === 'FRIOS').id;
@@ -77,7 +84,7 @@ const textoVisible = (page, texto) => esperar(page, (t) => document.body.innerTe
     check('Esc.4 tocar un ítem Listo avisa que el despacho se confirma en el pase', await textoVisible(page, 'el despacho se confirma desde el pase'));
     await sleep(300);
     check('Esc.4 el ítem sigue Listo', (await estadoServidor(pedidoId, a.id)) === 'LISTO');
-    check('HU012 Esc.5 el ítem Listo sale de la cola tras unos segundos', await esperar(page, (id) => !document.querySelector(`li[data-item="${id}"]`), a.id, 7000));
+    check('HU012 Esc.5 el ítem Listo sale de la cola al terminar la ventana para deshacer', await esperar(page, (id) => !document.querySelector(`li[data-item="${id}"]`), a.id, 9000));
 
     // --- Esc. 3: ítem En espera con hora de disparo futura pide confirmación
     await http('PATCH', `/items/${b.id}/estado`, coc.token, { estadoActual: 'RECIBIDO', estadoDestino: 'EN_ESPERA' });
@@ -118,6 +125,9 @@ const textoVisible = (page, texto) => esperar(page, (t) => document.body.innerTe
   } catch (e) {
     check('Ejecución sin excepciones', false, e.message);
   } finally {
+    if (admin && ventanaOriginal) {
+      await http('PUT', '/configuracion/cocina', admin.token, { ventanaRecallSegundos: ventanaOriginal }).catch(() => {});
+    }
     await browser.close();
     for (const r of results) console.log(`${r.ok ? 'OK  ' : 'FAIL'} ${r.name}${r.detail ? ` (${r.detail})` : ''}`);
     process.exit(results.every((r) => r.ok) ? 0 : 1);

@@ -33,6 +33,8 @@ Las capturas de pantalla se guardan en el directorio temporal del sistema (o en 
 | `smoke_hu020.cjs` | Registro manual de pedidos externos: canal, ítems, contacto, número de orden de Rappi en la tarjeta, solo expedidor y registro desde la pantalla en menos de 60 s |
 | `smoke_hu021.cjs` | Tarjeta completa: 6 elementos, cronómetro en vivo, destino según canal, adiciones marcadas, pedido extenso y cronómetro igual con otra PC de reloj adelantado |
 | `smoke_hu034.cjs` | Duplicados externos: reenvío igual (200, sin tarjeta nueva), otro canal, reenvío con cambios (409), registro manual repetido y reenvíos simultáneos |
+| `smoke_hu038.cjs` | Conexión: aviso en menos de 5 s, mismo aviso en comandero, estación y pase, cocina sin cambios durante el corte, reconexión sola con el pedido llegado en el corte y "Conectado" |
+| `smoke_hu033.cjs` | Deshacer: dentro de la ventana, solo el último cambio, ventana vencida y configurable, despachado no reversible, permisos y reflejo en estación y pase |
 | `smoke_hu015.cjs` | Canal visual: color e ícono por canal, color repetido o parecido al semáforo rechazado, cambio de color en vivo, mismo color en estación y pase, franja visible con el semáforo cambiando |
 | `smoke_hu025.cjs` | Semáforo: umbral fuera de rango, verde/ámbar/rojo, SLA distinto por canal, cambio de SLA en vivo, pase y pedido despachado (dura ~1 min) |
 

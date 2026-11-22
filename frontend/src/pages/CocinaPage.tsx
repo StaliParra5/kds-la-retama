@@ -13,9 +13,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { ahoraServidor, useRelojServidor } from '../api/reloj';
 import { useRecargaAgrupada, useTiempoReal } from '../api/tiempoReal';
+import { BotonDeshacer } from '../components/cocina/BotonDeshacer';
 import { CanalFranja } from '../components/cocina/CanalFranja';
 import { Cronometro } from '../components/cocina/Cronometro';
 import { TarjetaSemaforo } from '../components/cocina/TarjetaSemaforo';
+import { IndicadorConexion } from '../components/common/IndicadorConexion';
 import { TopAppBar } from '../components/common/TopAppBar';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -36,7 +38,8 @@ const SIGUIENTE_ESTADO: Partial<Record<EstadoItem, EstadoItem>> = {
   EN_PREPARACION: 'LISTO',
 };
 
-// Un ítem recién marcado Listo sigue visible unos segundos antes de salir de la cola
+// Un ítem recién marcado Listo sigue visible unos segundos antes de salir de la cola; HU033: si la ventana
+// para deshacer es mayor, sigue visible toda la ventana para poder deshacerlo
 const MS_LISTO_VISIBLE = 4000;
 
 const horaCorta = (fechaIso: string): string =>
@@ -187,6 +190,46 @@ export const CocinaPage: React.FC = () => {
     alConectar: recargarCola,
   });
 
+  // HU033: ventana para deshacer (la configura el administrador en Estaciones)
+  const { data: configuracionCocina } = useQuery<{ ventanaRecallSegundos: number }>({
+    queryKey: ['configuracion-cocina'],
+    queryFn: async () => (await apiClient.get('/configuracion/cocina')).data,
+    staleTime: 60000,
+  });
+  const ventanaRecallMs = (configuracionCocina?.ventanaRecallSegundos ?? 30) * 1000;
+
+  // HU033: deshace el último cambio del ítem; la estación y el pase lo reciben por tiempo real
+  const deshacer = async (item: ItemCocina) => {
+    if (estadosLocales[item.id]) return;
+    // HU038 Esc. 4: sin conexión no se intenta deshacer
+    if (!conectado) {
+      showToast('Sin conexión con el servidor: no se pudo deshacer. Espere a que se reconecte.', 'error');
+      return;
+    }
+    setEstadosLocales((prev) => ({ ...prev, [item.id]: item.estado }));
+    try {
+      const { data } = await apiClient.post<ItemCocina>(`/items/${item.id}/recall`, {
+        estadoActual: item.estado,
+      });
+      setRecienListos(quitarDe<ItemCocina>(item.id));
+      await queryClient.cancelQueries({ queryKey: ['cola', estacionId] });
+      queryClient.setQueryData<ItemCocina[]>(['cola', estacionId], (prev) =>
+        prev?.some((i) => i.id === data.id)
+          ? prev.map((i) => (i.id === data.id ? data : i))
+          : [...(prev ?? []), data],
+      );
+      showToast(
+        `${item.platoNombre}: se deshizo el cambio, vuelve a ${ESTILO_ESTADO[data.estado].etiqueta.toLowerCase()}.`,
+        'info',
+      );
+    } catch (err: any) {
+      showToast(err.response?.data?.mensaje ?? 'No se pudo deshacer el cambio.', 'warning');
+    } finally {
+      setEstadosLocales(quitarDe<EstadoItem>(item.id));
+      queryClient.invalidateQueries({ queryKey: ['cola', estacionId] });
+    }
+  };
+
   const enviarCambio = async (item: ItemCocina, destino: EstadoItem, inicioAnticipado = false) => {
     const estacionDelToque = estacionId;
     const sigueEnLaEstacion = () => estacionActual.current === estacionDelToque;
@@ -206,7 +249,7 @@ export const CocinaPage: React.FC = () => {
         const t = setTimeout(() => {
           temporizadores.current.delete(t);
           setRecienListos(quitarDe<ItemCocina>(data.id));
-        }, MS_LISTO_VISIBLE);
+        }, Math.max(MS_LISTO_VISIBLE, ventanaRecallMs));
         temporizadores.current.add(t);
       }
       // Una recarga en vuelo leída antes del cambio no debe pisar el estado confirmado
@@ -248,9 +291,17 @@ export const CocinaPage: React.FC = () => {
     }
   };
 
+  // HU038 Esc. 4: sin conexión con el servidor el cambio no se puede guardar; se avisa y no se intenta
+  const avisarSinConexion = () =>
+    showToast('Sin conexión con el servidor: el cambio no se registró. Espere a que se reconecte.', 'error');
+
   const alTocar = (item: ItemCocina) => {
     if (estadosLocales[item.id]) {
       return; // ya hay un cambio en curso para este ítem
+    }
+    if (!conectado) {
+      avisarSinConexion();
+      return;
     }
     if (item.estado === 'LISTO') {
       showToast('El ítem ya está listo: el despacho se confirma desde el pase.', 'info');
@@ -355,21 +406,9 @@ export const CocinaPage: React.FC = () => {
                 : `${totalPedidos} ${totalPedidos === 1 ? 'pedido activo' : 'pedidos activos'}`}{' '}
               · {colaFiltrada.length} {colaFiltrada.length === 1 ? 'ítem' : 'ítems'}
             </span>
-            {/* Sin estación no hay a qué conectarse: el indicador solo aparece con estación */}
-            {estacionId != null && (
-              <span
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border ${
-                  conectado
-                    ? 'bg-secondary/10 text-secondary border-secondary/30'
-                    : 'bg-error/10 text-error border-error/30'
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${conectado ? 'bg-secondary animate-pulse' : 'bg-error'}`}
-                />
-                {conectado ? 'En vivo' : rechazo ? 'Sin conexión' : 'Reconectando…'}
-              </span>
-            )}
+            {/* Sin estación no hay a qué conectarse: el indicador solo aparece con estación.
+                HU038 Esc. 1, 5 y 6: misma insignia de conexión con el servidor que el comandero y el pase */}
+            {estacionId != null && <IndicadorConexion conectado={conectado} />}
           </div>
         </div>
 
@@ -596,7 +635,8 @@ export const CocinaPage: React.FC = () => {
                             type="button"
                             onClick={() => alTocar(item)}
                             aria-busy={enCurso}
-                            className={`w-full text-left rounded-xl border-2 px-3 py-3 min-h-[64px] flex items-start justify-between gap-3 transition-colors active:scale-[0.99] ${estilo.fila} ${enCurso ? 'opacity-80' : ''}`}
+                            aria-disabled={!conectado}
+                            className={`w-full text-left rounded-xl border-2 px-3 py-3 min-h-[64px] flex items-start justify-between gap-3 transition-colors active:scale-[0.99] ${estilo.fila} ${enCurso || !conectado ? 'opacity-60' : ''}`}
                           >
                             <div className="min-w-0">
                               {/* HU021 Esc. 5: el nombre se parte en varias líneas antes que cortarse */}
@@ -639,6 +679,17 @@ export const CocinaPage: React.FC = () => {
                               {estilo.etiqueta}
                             </span>
                           </button>
+                          {/* HU033: deshacer el último toque mientras dure la ventana (tiempo debajo del botón) */}
+                          {item.estadoPrevio &&
+                            item.ultimoCambioEpochMs &&
+                            (item.estado === 'EN_PREPARACION' || item.estado === 'LISTO') && (
+                              <BotonDeshacer
+                                ultimoCambioMs={item.ultimoCambioEpochMs}
+                                ventanaMs={ventanaRecallMs}
+                                ocupado={enCurso}
+                                onDeshacer={() => void deshacer(item)}
+                              />
+                            )}
                         </li>
                       );
                     })}

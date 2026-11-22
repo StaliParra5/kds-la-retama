@@ -10,6 +10,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import pe.isil.kds.dto.AnularItemRequest;
 import pe.isil.kds.dto.CambiarEstadoItemRequest;
+import pe.isil.kds.dto.DeshacerCambioRequest;
 import pe.isil.kds.dto.ItemCocinaDto;
 import pe.isil.kds.dto.MotivoAnulacionDto;
 import pe.isil.kds.dto.TransicionDto;
@@ -92,6 +93,21 @@ public class ItemController {
             return ResponseEntity.ok(cicloVidaItemService.cambiarEstado(id, request, SesionKds.de(authentication)));
         } catch (ObjectOptimisticLockingFailureException e) {
             // HU013 Esc. 6: otra solicitud ganó la carrera; se responde con el estado vigente (lectura en transacción nueva)
+            throw new EstadoDesactualizadoException(cicloVidaItemService.obtenerItem(id));
+        }
+    }
+
+    @Operation(summary = "Deshacer el último cambio de estado de un ítem dentro de la ventana configurada (HU033, Cocinero de la estación/Admin)")
+    @PreAuthorize("hasAnyRole('COCINERO', 'ADMIN')")
+    @PostMapping("/{id}/recall")
+    public ResponseEntity<ItemCocinaDto> deshacerCambio(
+            @PathVariable Long id,
+            @Valid @RequestBody DeshacerCambioRequest request,
+            Authentication authentication) {
+        try {
+            return ResponseEntity.ok(cicloVidaItemService.deshacerCambio(id, request.getEstadoActual(), SesionKds.de(authentication)));
+        } catch (ObjectOptimisticLockingFailureException e) {
+            // Otra solicitud cambió el ítem al mismo tiempo: se responde con el estado vigente
             throw new EstadoDesactualizadoException(cicloVidaItemService.obtenerItem(id));
         }
     }

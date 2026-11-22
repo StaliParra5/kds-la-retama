@@ -38,6 +38,9 @@ import java.util.Optional;
  * - El estado del pedido se recalcula a partir de sus ítems y cada cambio queda registrado.
  *   El pedido se bloquea (FOR UPDATE) para que cambios simultáneos en ítems distintos
  *   no deriven su estado a partir de una lectura desactualizada.
+ * - HU033 (decisión D41): iniciar o marcar listo guarda el estado anterior y la hora del cambio; dentro de la
+ *   ventana configurada, cualquier cocinero de la estación (o el administrador) puede deshacerlo una vez. Al
+ *   deshacer o despachar se vacían, así solo se revierte el último cambio y nunca un despacho ni otro recall.
  */
 @Service
 public class CicloVidaItemService {
@@ -49,18 +52,21 @@ public class CicloVidaItemService {
     private final UsuarioRepository usuarioRepository;
     private final TrazabilidadService trazabilidadService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ConfiguracionCocinaService configuracionCocina;
 
     public CicloVidaItemService(
             DetallePedidoRepository detalleRepository,
             PedidoRepository pedidoRepository,
             UsuarioRepository usuarioRepository,
             TrazabilidadService trazabilidadService,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            ConfiguracionCocinaService configuracionCocina) {
         this.detalleRepository = detalleRepository;
         this.pedidoRepository = pedidoRepository;
         this.usuarioRepository = usuarioRepository;
         this.trazabilidadService = trazabilidadService;
         this.eventPublisher = eventPublisher;
+        this.configuracionCocina = configuracionCocina;
     }
 
     @Transactional
@@ -104,11 +110,68 @@ public class CicloVidaItemService {
         Usuario usuario = usuarioRepository.findByUsername(sesion.username()).orElse(null);
 
         item.setEstadoItem(destino);
+        // HU033: los cambios de cocina se pueden deshacer dentro de la ventana; el despacho nunca
+        if (destino == EstadoItem.EN_PREPARACION || destino == EstadoItem.LISTO) {
+            item.setEstadoPrevio(origen);
+            item.setUltimoCambioEn(LocalDateTime.now());
+        } else {
+            item.setEstadoPrevio(null);
+            item.setUltimoCambioEn(null);
+        }
         detalleRepository.saveAndFlush(item);
         trazabilidadService.registrarItem(item, origen.name(), destino.name(), usuario, motivo);
         Optional<NotificadorKds.PedidoKdsEvent> cambioPedido = actualizarEstadoPedido(item.getPedido(), usuario);
 
         // Orden fijo de notificación: primero el ítem que cambió y luego el pedido que derivó de él
+        ItemCocinaDto dto = ItemCocinaMapper.aDto(item);
+        eventPublisher.publishEvent(new NotificadorKds.ItemsKdsEvent(NotificadorKds.TipoEvento.ITEM_ACTUALIZADO, List.of(dto)));
+        cambioPedido.ifPresent(eventPublisher::publishEvent);
+        return dto;
+    }
+
+    /**
+     * HU033: deshace el último cambio de estado del ítem si sigue dentro de la ventana (Esc. 1 a 5). Queda en el
+     * historial como una transición más, sin borrar la anterior (HU022 Esc. 4), y se avisa a la estación y al
+     * pase para que reflejen el estado anterior sin recargar (Esc. 6).
+     */
+    @Transactional
+    public ItemCocinaDto deshacerCambio(Long itemId, EstadoItem estadoActual, SesionKds sesion) {
+        Long pedidoId = detalleRepository.findPedidoIdById(itemId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Ítem no encontrado con ID: " + itemId));
+        pedidoRepository.bloquearPorId(pedidoId);
+        DetallePedido item = detalleRepository.findById(itemId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Ítem no encontrado con ID: " + itemId));
+
+        // Solo la cocina de la estación del ítem (o el administrador) deshace cambios de preparación
+        validarPermiso(item, EstadoItem.EN_PREPARACION, sesion);
+        EstadoItem origen = item.getEstadoItem();
+        if (origen != estadoActual) {
+            throw new EstadoDesactualizadoException(ItemCocinaMapper.aDto(item));
+        }
+        if (origen == EstadoItem.DESPACHADO) {
+            throw new OperacionNoPermitidaException("El ítem ya fue despachado: ese cambio no se puede deshacer.",
+                    OperacionNoPermitidaException.RECALL_NO_DISPONIBLE);
+        }
+        EstadoItem previo = item.getEstadoPrevio();
+        if (previo == null || item.getUltimoCambioEn() == null
+                || (origen != EstadoItem.EN_PREPARACION && origen != EstadoItem.LISTO)) {
+            throw new OperacionNoPermitidaException("Este ítem no tiene un cambio reciente que se pueda deshacer.",
+                    OperacionNoPermitidaException.RECALL_NO_DISPONIBLE);
+        }
+        int ventana = configuracionCocina.ventanaRecallSegundos();
+        if (LocalDateTime.now().isAfter(item.getUltimoCambioEn().plusSeconds(ventana))) {
+            throw new OperacionNoPermitidaException("Ya pasaron los " + ventana + " segundos para deshacer este cambio.",
+                    OperacionNoPermitidaException.RECALL_VENCIDO);
+        }
+
+        Usuario usuario = usuarioRepository.findByUsername(sesion.username()).orElse(null);
+        item.setEstadoItem(previo);
+        item.setEstadoPrevio(null);
+        item.setUltimoCambioEn(null);
+        detalleRepository.saveAndFlush(item);
+        trazabilidadService.registrarItem(item, origen.name(), previo.name(), usuario, "Recall: se deshizo el último cambio");
+        Optional<NotificadorKds.PedidoKdsEvent> cambioPedido = actualizarEstadoPedido(item.getPedido(), usuario);
+
         ItemCocinaDto dto = ItemCocinaMapper.aDto(item);
         eventPublisher.publishEvent(new NotificadorKds.ItemsKdsEvent(NotificadorKds.TipoEvento.ITEM_ACTUALIZADO, List.of(dto)));
         cambioPedido.ifPresent(eventPublisher::publishEvent);

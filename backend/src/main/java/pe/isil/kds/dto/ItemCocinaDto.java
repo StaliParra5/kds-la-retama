@@ -47,6 +47,9 @@ public class ItemCocinaDto {
     private Integer canalUmbralAmbar;
     // D39: minutos en que el semáforo pasa a ámbar ya calculados (Salón: minutos de amarillo de la pestaña Salón)
     private Double canalAmbarMinutos;
+    // HU033: último cambio que se puede deshacer (estado al que vuelve e instante del cambio); null si no hay
+    private String estadoPrevio;
+    private Long ultimoCambioEpochMs;
     // HU021 Esc. 4: 0 = comanda original; 1, 2... = adiciones enviadas después a la misma mesa
     private Integer numeroAdicion;
     // HU021 Esc. 6: envío a cocina como instante absoluto (ms desde 1970): no depende de la zona horaria de la PC
@@ -122,6 +125,12 @@ public class ItemCocinaDto {
 
     public String getCanalIcono() { return canalIcono; }
     public void setCanalIcono(String canalIcono) { this.canalIcono = canalIcono; }
+
+    public String getEstadoPrevio() { return estadoPrevio; }
+    public void setEstadoPrevio(String estadoPrevio) { this.estadoPrevio = estadoPrevio; }
+
+    public Long getUltimoCambioEpochMs() { return ultimoCambioEpochMs; }
+    public void setUltimoCambioEpochMs(Long ultimoCambioEpochMs) { this.ultimoCambioEpochMs = ultimoCambioEpochMs; }
 
     public Double getCanalAmbarMinutos() { return canalAmbarMinutos; }
     public void setCanalAmbarMinutos(Double canalAmbarMinutos) { this.canalAmbarMinutos = canalAmbarMinutos; }

@@ -2,7 +2,7 @@
 const path = require('path');
 const FRONT = path.resolve(__dirname, '../../frontend');
 const puppeteer = require(path.join(FRONT, 'node_modules/puppeteer-core'));
-const { sleep, http, login, loginCompleto, stompSuscriptor, vaciarCola } = require('./lib.cjs');
+const { sleep, http, login, loginCompleto, stompSuscriptor, vaciarCola, activarCanal } = require('./lib.cjs');
 
 const BASE = 'http://localhost:5173';
 const OUT = process.env.E2E_OUT || require('os').tmpdir();
@@ -35,7 +35,10 @@ const rechaza = async (promesa) => {
   });
   const errors = [];
 
+  let restaurarDelivery = async () => {};
   try {
+    // El canal Delivery puede estar inactivo: la prueba lo activa y al final lo deja como estaba
+    restaurarDelivery = await activarCanal('DELIVERY');
     const mozo = await login('login-pin', { username: 'angie', pin: '1234' });
     const estaciones = (await http('GET', '/estaciones', mozo)).data;
     const id = (codigo) => estaciones.find((e) => e.codigo === codigo).id;
@@ -92,7 +95,7 @@ const rechaza = async (promesa) => {
     const causa = platoDe('FRIOS');
     const t0 = Date.now();
     const pedido = await http('POST', '/pedidos', mozo, { canalId: 3, items: [
-      { platoId: lomo.id, cantidad: 1 }, { platoId: tallarin.id, cantidad: 2 }, { platoId: causa.id, cantidad: 1, modificadores: 'Sin ají' },
+      { platoId: lomo.id, cantidad: 1 }, { platoId: tallarin.id, cantidad: 2 }, { platoId: causa.id, cantidad: 1 },
     ] });
     const codigo = pedido.data.codigoCorrelativo;
     const llego = await esperar(page, (c) => !!document.querySelector(`article[data-pedido="${c}"]`), codigo);
@@ -142,6 +145,11 @@ const rechaza = async (promesa) => {
   } catch (e) {
     check('Ejecución sin excepciones', false, e.message);
   } finally {
+    try {
+      await restaurarDelivery();
+    } catch (e) {
+      console.warn(`No se pudo restaurar el canal Delivery: ${e.message}`);
+    }
     await browser.close();
     for (const r of results) console.log(`${r.ok ? 'OK  ' : 'FAIL'} ${r.name}${r.detail ? ` (${r.detail})` : ''}`);
     process.exit(results.every((r) => r.ok) ? 0 : 1);

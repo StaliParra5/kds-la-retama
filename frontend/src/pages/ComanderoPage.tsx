@@ -19,6 +19,7 @@ import {
 } from '../components/comandero/AnulacionItem';
 import { type Destino, SeleccionDestino } from '../components/comandero/SeleccionDestino';
 import { LaRetamaWatermark } from '../components/common/LaRetamaWatermark';
+import { IndicadorConexion } from '../components/common/IndicadorConexion';
 import { TopAppBar } from '../components/common/TopAppBar';
 import { useToast } from '../context/ToastContext';
 import type {
@@ -288,7 +289,8 @@ export const ComanderoPage: React.FC = () => {
 
   // La primera conexión llega justo tras la carga inicial; solo las reconexiones recargan lo perdido
   const yaConectado = useRef(false);
-  useTiempoReal({
+  // HU038: el estado de la conexión alimenta el aviso; el comandero no se bloquea (el envío se reintenta sin duplicar)
+  const { conectado } = useTiempoReal({
     destinos: ['/topic/platos', '/topic/pedidos'],
     alMensaje: (destino) => {
       if (destino === '/topic/platos') recargarPlatos();
@@ -581,6 +583,10 @@ export const ComanderoPage: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
         <TopAppBar />
+        {/* HU038 Esc. 5: misma insignia de conexión que la estación y el pase; el comandero no se bloquea */}
+        <div className="max-w-5xl w-full mx-auto mt-4 px-4 lg:px-6 flex justify-end">
+          <IndicadorConexion conectado={conectado} />
+        </div>
         {/* HU009/HU045: el acuse del último envío sigue visible al volver a elegir destino */}
         {acuse && (
           <output
@@ -652,6 +658,8 @@ export const ComanderoPage: React.FC = () => {
             >
               {esSalon ? 'Cambiar mesa' : 'Cambiar'}
             </button>
+            {/* HU038 Esc. 5: misma insignia de conexión que la estación y el pase */}
+            <IndicadorConexion conectado={conectado} />
             {atencion && (
               <button
                 type="button"

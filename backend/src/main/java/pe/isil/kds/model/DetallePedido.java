@@ -58,6 +58,15 @@ public class DetallePedido {
     @Column(name = "hora_disparo")
     private LocalDateTime horaDisparo;
 
+    // HU033: último cambio de cocina que se puede deshacer (estado al que vuelve y cuándo ocurrió); se vacían al
+    // deshacer o despachar, así solo se revierte el último cambio
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estado_previo", length = 30)
+    private EstadoItem estadoPrevio;
+
+    @Column(name = "ultimo_cambio_en")
+    private LocalDateTime ultimoCambioEn;
+
     @Version
     @Column(nullable = false)
     private Long version = 0L;
@@ -105,4 +114,10 @@ public class DetallePedido {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public EstadoItem getEstadoPrevio() { return estadoPrevio; }
+    public void setEstadoPrevio(EstadoItem estadoPrevio) { this.estadoPrevio = estadoPrevio; }
+
+    public LocalDateTime getUltimoCambioEn() { return ultimoCambioEn; }
+    public void setUltimoCambioEn(LocalDateTime ultimoCambioEn) { this.ultimoCambioEn = ultimoCambioEn; }
 }
