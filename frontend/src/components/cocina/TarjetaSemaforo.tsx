@@ -8,7 +8,7 @@
 
 import { type FC, type ReactNode, useEffect, useState } from 'react';
 import { ahoraServidor } from '../../api/reloj';
-import { nivelSemaforo, type NivelSemaforo } from '../../utils/cocina';
+import { type NivelSemaforo, nivelSemaforo } from '../../utils/cocina';
 
 export const TarjetaSemaforo: FC<{
   codigoPedido: string;

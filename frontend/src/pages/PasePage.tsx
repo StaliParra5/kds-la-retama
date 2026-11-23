@@ -14,6 +14,7 @@ import { CanalFranja } from '../components/cocina/CanalFranja';
 import { Cronometro } from '../components/cocina/Cronometro';
 import { TarjetaSemaforo } from '../components/cocina/TarjetaSemaforo';
 import { IndicadorConexion } from '../components/common/IndicadorConexion';
+import { CLAVE_ESTADO_SISTEMA, IndicadorInternet } from '../components/common/IndicadorInternet';
 import { TopAppBar } from '../components/common/TopAppBar';
 import { useToast } from '../context/ToastContext';
 import type { ItemCocina } from '../types';
@@ -41,9 +42,16 @@ export const PasePage: React.FC = () => {
   const recargar = useRecargaAgrupada(CLAVE_LISTOS);
   // HU025 Esc. 4: un cambio de SLA, umbral o apariencia de un canal también recarga la lista
   const { conectado, rechazo } = useTiempoReal({
-    destinos: ['/topic/items', '/topic/canales'],
-    alMensaje: recargar,
-    alConectar: recargar,
+    destinos: ['/topic/items', '/topic/canales', '/topic/sistema'],
+    // HU018: el aviso de internet solo actualiza su consulta; lo demás recarga los pedidos por entregar
+    alMensaje: (destino, cuerpo) => {
+      if (destino === '/topic/sistema') queryClient.setQueryData(CLAVE_ESTADO_SISTEMA, cuerpo);
+      else recargar();
+    },
+    alConectar: () => {
+      recargar();
+      queryClient.invalidateQueries({ queryKey: CLAVE_ESTADO_SISTEMA });
+    },
   });
 
   const marcarEnCurso = (id: number, activo: boolean) =>
@@ -145,7 +153,11 @@ export const PasePage: React.FC = () => {
               {grupos.length === 1 ? 'pedido' : 'pedidos'}
             </span>
             {/* HU038 Esc. 5 y 6: misma insignia de conexión que la estación; el pase no se bloquea (sus acciones se reintentan) */}
-            <IndicadorConexion conectado={conectado} />
+            <div className="flex flex-col items-end gap-1">
+              <IndicadorConexion conectado={conectado} />
+              {/* HU018: "Sin internet" debajo, solo cuando falta */}
+              <IndicadorInternet />
+            </div>
           </div>
         </div>
       </div>
@@ -220,7 +232,7 @@ export const PasePage: React.FC = () => {
                       envioMs={grupo.envioCocinaEpochMs}
                       slaMinutos={grupo.canalSlaMinutos}
                       umbralAmbar={grupo.canalUmbralAmbar}
-                  ambarMinutos={grupo.canalAmbarMinutos}
+                      ambarMinutos={grupo.canalAmbarMinutos}
                     />
                   </header>
 

@@ -48,7 +48,10 @@ export const AdminMiClavePage: React.FC = () => {
       setClave('');
       setConfirmacion('');
     } catch (err: any) {
-      showToast(err.response?.data?.mensaje ?? 'No se pudo guardar la clave de autorización.', 'warning');
+      showToast(
+        err.response?.data?.mensaje ?? 'No se pudo guardar la clave de autorización.',
+        'warning',
+      );
       setPassword('');
     } finally {
       setGuardando(false);
@@ -61,10 +64,12 @@ export const AdminMiClavePage: React.FC = () => {
 
       <main className="flex-1 max-w-lg w-full mx-auto p-4 lg:p-6 flex flex-col gap-6">
         <div>
-          <h1 className="font-headline font-bold text-2xl tracking-tight">Mi clave de autorización</h1>
+          <h1 className="font-headline font-bold text-2xl tracking-tight">
+            Mi clave de autorización
+          </h1>
           <p className="text-sm text-on-surface-variant mt-1">
-            Con esta clave de 6 dígitos autoriza que un mozo o el expedidor anule un ítem que cocina ya
-            inició. Es distinta de la contraseña de su cuenta.
+            Con esta clave de 6 dígitos autoriza que un mozo o el expedidor anule un ítem que cocina
+            ya inició. Es distinta de la contraseña de su cuenta.
           </p>
         </div>
 

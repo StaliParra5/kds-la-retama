@@ -51,6 +51,11 @@ kds:
   # Vacía = integración deshabilitada: nunca se acepta una clave vacía. En producción debe definirse por entorno.
   integracion:
     api-key: ${KDS_INTEGRACION_API_KEY:}
+  # HU018: comprobación de la salida a internet del servidor (solo para avisar de los canales externos)
+  internet:
+    verificar: ${KDS_INTERNET_VERIFICAR:true}
+    url-verificacion: ${KDS_INTERNET_URL:http://connectivitycheck.gstatic.com/generate_204}
+    intervalo-ms: ${KDS_INTERNET_INTERVALO_MS:10000}
 
 # Documentación OpenAPI Swagger
 springdoc:

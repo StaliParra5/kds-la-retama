@@ -18,6 +18,7 @@ import { CanalFranja } from '../components/cocina/CanalFranja';
 import { Cronometro } from '../components/cocina/Cronometro';
 import { TarjetaSemaforo } from '../components/cocina/TarjetaSemaforo';
 import { IndicadorConexion } from '../components/common/IndicadorConexion';
+import { CLAVE_ESTADO_SISTEMA, IndicadorInternet } from '../components/common/IndicadorInternet';
 import { TopAppBar } from '../components/common/TopAppBar';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -161,6 +162,11 @@ export const CocinaPage: React.FC = () => {
       recargarCola();
       return;
     }
+    // HU018: cambió la salida a internet del servidor; solo actualiza el aviso
+    if (destino === '/topic/sistema') {
+      queryClient.setQueryData(CLAVE_ESTADO_SISTEMA, cuerpo);
+      return;
+    }
     const item = (cuerpo as { item?: ItemCocina } | null)?.item;
     if (item && (item.estado === 'DESPACHADO' || item.estado === 'ANULADO')) {
       // HU032 Esc. 5: si ya se estaba cocinando el aviso queda fijo para que nadie lo termine por error;
@@ -185,7 +191,10 @@ export const CocinaPage: React.FC = () => {
     recargarCola();
   };
   const { conectado, rechazo } = useTiempoReal({
-    destinos: estacionId != null ? [`/topic/estacion/${estacionId}`, '/topic/canales'] : [],
+    destinos:
+      estacionId != null
+        ? [`/topic/estacion/${estacionId}`, '/topic/canales', '/topic/sistema']
+        : [],
     alMensaje,
     alConectar: recargarCola,
   });
@@ -203,7 +212,10 @@ export const CocinaPage: React.FC = () => {
     if (estadosLocales[item.id]) return;
     // HU038 Esc. 4: sin conexión no se intenta deshacer
     if (!conectado) {
-      showToast('Sin conexión con el servidor: no se pudo deshacer. Espere a que se reconecte.', 'error');
+      showToast(
+        'Sin conexión con el servidor: no se pudo deshacer. Espere a que se reconecte.',
+        'error',
+      );
       return;
     }
     setEstadosLocales((prev) => ({ ...prev, [item.id]: item.estado }));
@@ -246,10 +258,13 @@ export const CocinaPage: React.FC = () => {
       }
       if (data.estado === 'LISTO') {
         setRecienListos((prev) => ({ ...prev, [data.id]: data }));
-        const t = setTimeout(() => {
-          temporizadores.current.delete(t);
-          setRecienListos(quitarDe<ItemCocina>(data.id));
-        }, Math.max(MS_LISTO_VISIBLE, ventanaRecallMs));
+        const t = setTimeout(
+          () => {
+            temporizadores.current.delete(t);
+            setRecienListos(quitarDe<ItemCocina>(data.id));
+          },
+          Math.max(MS_LISTO_VISIBLE, ventanaRecallMs),
+        );
         temporizadores.current.add(t);
       }
       // Una recarga en vuelo leída antes del cambio no debe pisar el estado confirmado
@@ -293,7 +308,10 @@ export const CocinaPage: React.FC = () => {
 
   // HU038 Esc. 4: sin conexión con el servidor el cambio no se puede guardar; se avisa y no se intenta
   const avisarSinConexion = () =>
-    showToast('Sin conexión con el servidor: el cambio no se registró. Espere a que se reconecte.', 'error');
+    showToast(
+      'Sin conexión con el servidor: el cambio no se registró. Espere a que se reconecte.',
+      'error',
+    );
 
   const alTocar = (item: ItemCocina) => {
     if (estadosLocales[item.id]) {
@@ -408,7 +426,13 @@ export const CocinaPage: React.FC = () => {
             </span>
             {/* Sin estación no hay a qué conectarse: el indicador solo aparece con estación.
                 HU038 Esc. 1, 5 y 6: misma insignia de conexión con el servidor que el comandero y el pase */}
-            {estacionId != null && <IndicadorConexion conectado={conectado} />}
+            {estacionId != null && (
+              <div className="flex flex-col items-end gap-1">
+                <IndicadorConexion conectado={conectado} />
+                {/* HU018: "Sin internet" debajo, para no ensanchar la barra; solo aparece cuando falta */}
+                <IndicadorInternet />
+              </div>
+            )}
           </div>
         </div>
 
@@ -621,7 +645,7 @@ export const CocinaPage: React.FC = () => {
                       envioMs={grupo.envioCocinaEpochMs}
                       slaMinutos={grupo.canalSlaMinutos}
                       umbralAmbar={grupo.canalUmbralAmbar}
-                  ambarMinutos={grupo.canalAmbarMinutos}
+                      ambarMinutos={grupo.canalAmbarMinutos}
                     />
                   </header>
 

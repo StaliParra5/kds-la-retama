@@ -18,6 +18,7 @@ import {
   type ItemPorAnular,
   PedidosEnviados,
 } from '../components/comandero/AnulacionItem';
+import { CLAVE_ESTADO_SISTEMA, useEstadoInternet } from '../components/common/IndicadorInternet';
 import { TopAppBar } from '../components/common/TopAppBar';
 import { useToast } from '../context/ToastContext';
 import type { CanalVenta, CategoriaPlato, PedidoResponse, Plato } from '../types';
@@ -38,7 +39,10 @@ const nuevaClave = (): string =>
 
 // Búsqueda sin distinguir mayúsculas ni tildes: "ají" y "aji" encuentran el mismo plato
 const normalizar = (texto: string): string =>
-  texto.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+  texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '');
 
 const campo =
   'w-full bg-surface-container-low text-sm font-medium px-3 py-2.5 rounded-lg border border-surface-container-high focus:outline-none focus:ring-2 focus:ring-primary';
@@ -63,6 +67,8 @@ export const PedidoExternoPage: React.FC = () => {
   const [pestana, setPestana] = useState<'registrar' | 'recientes'>('registrar');
   const [itemPorAnular, setItemPorAnular] = useState<ItemPorAnular | null>(null);
   const queryClient = useQueryClient();
+  // HU018 Esc. 4: sin internet los pedidos de Rappi no llegan solos; se registran aquí
+  const { data: estadoSistema } = useEstadoInternet();
   const siguienteLinea = useRef(1);
   // Misma clave hasta que el servidor confirme: reintentar tras una falla de red no duplica el pedido
   const clave = useRef(nuevaClave());
@@ -96,8 +102,13 @@ export const PedidoExternoPage: React.FC = () => {
   // HU030: un plato agotado o reactivado también se refleja al instante en la carta de esta pantalla
   const recargarCarta = useRecargaAgrupada(['platos']);
   useTiempoReal({
-    destinos: ['/topic/pedidos', '/topic/platos'],
-    alMensaje: (destino) => (destino === '/topic/platos' ? recargarCarta() : recargarRecientes()),
+    destinos: ['/topic/pedidos', '/topic/platos', '/topic/sistema'],
+    alMensaje: (destino, cuerpo) => {
+      // HU018: el aviso de internet solo actualiza su consulta
+      if (destino === '/topic/sistema') queryClient.setQueryData(CLAVE_ESTADO_SISTEMA, cuerpo);
+      else if (destino === '/topic/platos') recargarCarta();
+      else recargarRecientes();
+    },
     alConectar: () => {
       recargarRecientes();
       recargarCarta();
@@ -207,12 +218,16 @@ export const PedidoExternoPage: React.FC = () => {
       });
       setUltimo(data);
       queryClient.invalidateQueries({ queryKey: ['pedidos-externos-recientes'] });
-      showToast(`Pedido ${data.codigoCorrelativo} (${data.canalNombre}) enviado a cocina.`, 'success');
+      showToast(
+        `Pedido ${data.codigoCorrelativo} (${data.canalNombre}) enviado a cocina.`,
+        'success',
+      );
       reiniciarFormulario();
     } catch (err: any) {
       const respuesta = err.response;
       showToast(
-        respuesta?.data?.mensaje ?? 'No se pudo registrar el pedido. Revise la conexión e intente de nuevo.',
+        respuesta?.data?.mensaje ??
+          'No se pudo registrar el pedido. Revise la conexión e intente de nuevo.',
         respuesta ? 'warning' : 'error',
       );
       // Un plato pudo agotarse o cambiar mientras se armaba el pedido: se recarga la carta
@@ -275,350 +290,389 @@ export const PedidoExternoPage: React.FC = () => {
       </div>
 
       {pestana === 'registrar' ? (
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
-        <section className="flex flex-col gap-5">
-          {ultimo && (
-            <p
-              data-ultimo-externo={ultimo.codigoCorrelativo}
-              className="text-sm font-semibold rounded-xl bg-secondary/10 text-secondary px-4 py-3"
-            >
-              Último pedido enviado: {ultimo.codigoCorrelativo} · {ultimo.canalNombre}
-              {ultimo.numeroOrdenExterno ? ` · Orden ${ultimo.numeroOrdenExterno}` : ''}
-            </p>
-          )}
-
-          {/* Canal obligatorio (Esc. 2) */}
-          <div>
-            <h3 className="text-xs font-bold uppercase text-on-surface-variant mb-2">Canal</h3>
-            <div className="flex flex-wrap gap-2">
-              {opciones.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  data-canal-externo={c.codigo}
-                  aria-pressed={canalId === c.id}
-                  onClick={() => setCanalId(c.id)}
-                  className={`min-h-[48px] px-5 rounded-xl border text-sm font-bold transition-colors ${
-                    canalId === c.id
-                      ? 'bg-primary text-on-primary border-primary'
-                      : 'bg-surface-container-lowest border-surface-container-high hover:border-primary/50'
-                  }`}
-                >
-                  {c.nombre}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Datos según el canal: número de orden del agregador o contacto del cliente (Esc. 3 y 4) */}
-          {canal && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {esAgregador && (
-                <div className="sm:col-span-2">
-                  <label htmlFor="externo-numero-orden" className="block text-xs font-bold uppercase mb-1">
-                    Número de orden de {canal.nombre}
-                  </label>
-                  <input
-                    id="externo-numero-orden"
-                    className={campo}
-                    value={numeroOrden}
-                    maxLength={60}
-                    onChange={(e) => setNumeroOrden(e.target.value)}
-                    placeholder="Ej. RP-48213"
-                  />
-                </div>
-              )}
-              <div>
-                <label htmlFor="externo-nombre" className="block text-xs font-bold uppercase mb-1">
-                  Nombre del cliente{esAgregador ? ' (opcional)' : ''}
-                </label>
-                <input
-                  id="externo-nombre"
-                  className={campo}
-                  value={nombre}
-                  maxLength={120}
-                  onChange={(e) => setNombre(e.target.value)}
-                />
-              </div>
-              {/* Rappi no maneja celular del cliente */}
-              {!esAgregador && (
-                <div>
-                  <label htmlFor="externo-telefono" className="block text-xs font-bold uppercase mb-1">
-                    Celular
-                  </label>
-                  <input
-                    id="externo-telefono"
-                    className={avisarCelular ? campoError : campo}
-                    inputMode="numeric"
-                    value={telefono}
-                    maxLength={9}
-                    aria-invalid={avisarCelular}
-                    aria-describedby={avisarCelular ? 'externo-celular-aviso' : undefined}
-                    onChange={(e) => setTelefono(e.target.value.replace(/\D/g, '').slice(0, 9))}
-                    placeholder="987654321"
-                  />
-                  {avisarCelular && (
-                    <p
-                      id="externo-celular-aviso"
-                      data-aviso-celular
-                      className="mt-1 text-xs font-semibold text-error"
-                    >
-                      {telefono.length < 9 ? 'Complete los 9 dígitos' : 'El celular debe empezar con 9'}
-                    </p>
-                  )}
-                </div>
-              )}
-              {pideDireccion && (
-                <div className="sm:col-span-2">
-                  <label htmlFor="externo-direccion" className="block text-xs font-bold uppercase mb-1">
-                    Dirección
-                  </label>
-                  <input
-                    id="externo-direccion"
-                    className={campo}
-                    value={direccion}
-                    maxLength={255}
-                    onChange={(e) => setDireccion(e.target.value)}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Carta: búsqueda y categorías, un toque agrega el plato */}
-          <div>
-            <h3 className="text-xs font-bold uppercase text-on-surface-variant mb-2">Platos</h3>
-            <input
-              id="externo-buscar"
-              className={campo}
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar plato…"
-              autoComplete="off"
-            />
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              <button
-                type="button"
-                aria-pressed={categoriaId === null}
-                onClick={() => setCategoriaId(null)}
-                className={`min-h-[36px] px-3 rounded-full border text-xs font-bold ${
-                  categoriaId === null
-                    ? 'bg-primary text-on-primary border-primary'
-                    : 'border-surface-container-high hover:border-primary/50'
-                }`}
+        <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
+          <section className="flex flex-col gap-5">
+            {estadoSistema?.internet === false && (
+              <p
+                role="status"
+                data-aviso-sin-internet
+                className="flex items-center gap-2 text-sm font-semibold rounded-xl bg-tertiary/10 text-tertiary border border-tertiary/30 px-4 py-3"
               >
-                Todas
-              </button>
-              {categorias.map((c) => (
+                <span className="material-symbols-outlined text-[20px]">cloud_off</span>
+                Sin internet: registre aquí los pedidos de Rappi.
+              </p>
+            )}
+            {ultimo && (
+              <p
+                data-ultimo-externo={ultimo.codigoCorrelativo}
+                className="text-sm font-semibold rounded-xl bg-secondary/10 text-secondary px-4 py-3"
+              >
+                Último pedido enviado: {ultimo.codigoCorrelativo} · {ultimo.canalNombre}
+                {ultimo.numeroOrdenExterno ? ` · Orden ${ultimo.numeroOrdenExterno}` : ''}
+              </p>
+            )}
+
+            {/* Canal obligatorio (Esc. 2) */}
+            <div>
+              <h3 className="text-xs font-bold uppercase text-on-surface-variant mb-2">Canal</h3>
+              <div className="flex flex-wrap gap-2">
+                {opciones.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    data-canal-externo={c.codigo}
+                    aria-pressed={canalId === c.id}
+                    onClick={() => setCanalId(c.id)}
+                    className={`min-h-[48px] px-5 rounded-xl border text-sm font-bold transition-colors ${
+                      canalId === c.id
+                        ? 'bg-primary text-on-primary border-primary'
+                        : 'bg-surface-container-lowest border-surface-container-high hover:border-primary/50'
+                    }`}
+                  >
+                    {c.nombre}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Datos según el canal: número de orden del agregador o contacto del cliente (Esc. 3 y 4) */}
+            {canal && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {esAgregador && (
+                  <div className="sm:col-span-2">
+                    <label
+                      htmlFor="externo-numero-orden"
+                      className="block text-xs font-bold uppercase mb-1"
+                    >
+                      Número de orden de {canal.nombre}
+                    </label>
+                    <input
+                      id="externo-numero-orden"
+                      className={campo}
+                      value={numeroOrden}
+                      maxLength={60}
+                      onChange={(e) => setNumeroOrden(e.target.value)}
+                      placeholder="Ej. RP-48213"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label
+                    htmlFor="externo-nombre"
+                    className="block text-xs font-bold uppercase mb-1"
+                  >
+                    Nombre del cliente{esAgregador ? ' (opcional)' : ''}
+                  </label>
+                  <input
+                    id="externo-nombre"
+                    className={campo}
+                    value={nombre}
+                    maxLength={120}
+                    onChange={(e) => setNombre(e.target.value)}
+                  />
+                </div>
+                {/* Rappi no maneja celular del cliente */}
+                {!esAgregador && (
+                  <div>
+                    <label
+                      htmlFor="externo-telefono"
+                      className="block text-xs font-bold uppercase mb-1"
+                    >
+                      Celular
+                    </label>
+                    <input
+                      id="externo-telefono"
+                      className={avisarCelular ? campoError : campo}
+                      inputMode="numeric"
+                      value={telefono}
+                      maxLength={9}
+                      aria-invalid={avisarCelular}
+                      aria-describedby={avisarCelular ? 'externo-celular-aviso' : undefined}
+                      onChange={(e) => setTelefono(e.target.value.replace(/\D/g, '').slice(0, 9))}
+                      placeholder="987654321"
+                    />
+                    {avisarCelular && (
+                      <p
+                        id="externo-celular-aviso"
+                        data-aviso-celular
+                        className="mt-1 text-xs font-semibold text-error"
+                      >
+                        {telefono.length < 9
+                          ? 'Complete los 9 dígitos'
+                          : 'El celular debe empezar con 9'}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {pideDireccion && (
+                  <div className="sm:col-span-2">
+                    <label
+                      htmlFor="externo-direccion"
+                      className="block text-xs font-bold uppercase mb-1"
+                    >
+                      Dirección
+                    </label>
+                    <input
+                      id="externo-direccion"
+                      className={campo}
+                      value={direccion}
+                      maxLength={255}
+                      onChange={(e) => setDireccion(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Carta: búsqueda y categorías, un toque agrega el plato */}
+            <div>
+              <h3 className="text-xs font-bold uppercase text-on-surface-variant mb-2">Platos</h3>
+              <input
+                id="externo-buscar"
+                className={campo}
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar plato…"
+                autoComplete="off"
+              />
+              <div className="flex flex-wrap gap-1.5 mt-2">
                 <button
-                  key={c.id}
                   type="button"
-                  aria-pressed={categoriaId === c.id}
-                  onClick={() => setCategoriaId(c.id)}
+                  aria-pressed={categoriaId === null}
+                  onClick={() => setCategoriaId(null)}
                   className={`min-h-[36px] px-3 rounded-full border text-xs font-bold ${
-                    categoriaId === c.id
+                    categoriaId === null
                       ? 'bg-primary text-on-primary border-primary'
                       : 'border-surface-container-high hover:border-primary/50'
                   }`}
                 >
-                  {c.nombre}
+                  Todas
                 </button>
-              ))}
-            </div>
-            {/* Mismas tarjetas de plato que el comandero del mozo */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3 max-h-[560px] overflow-y-auto pr-1">
-              {cargandoPlatos && <p className="text-sm text-on-surface-variant">Cargando carta…</p>}
-              {!cargandoPlatos && platosVisibles.length === 0 && (
-                <p className="col-span-full text-sm text-on-surface-variant">
-                  No hay platos disponibles con ese criterio.
-                </p>
-              )}
-              {platosVisibles.map((p) => {
-                // Suma todas las líneas del plato (puede haber varias con modificadores distintos)
-                const cantidadEnPedido = lineas
-                  .filter((l) => l.plato.id === p.id)
-                  .reduce((acc, l) => acc + l.cantidad, 0);
-                return (
-                  <div
-                    key={p.id}
-                    data-plato={p.id}
-                    className="bg-surface-container-lowest border border-surface-container-high rounded-xl p-3.5 flex flex-col justify-between shadow-xs hover:border-primary/50 hover:shadow-md transition-all text-left relative overflow-hidden group"
+                {categorias.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    aria-pressed={categoriaId === c.id}
+                    onClick={() => setCategoriaId(c.id)}
+                    className={`min-h-[36px] px-3 rounded-full border text-xs font-bold ${
+                      categoriaId === c.id
+                        ? 'bg-primary text-on-primary border-primary'
+                        : 'border-surface-container-high hover:border-primary/50'
+                    }`}
                   >
-                    {cantidadEnPedido > 0 && (
-                      <span className="absolute top-2 right-2 bg-primary text-on-primary text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
-                        {cantidadEnPedido}
+                    {c.nombre}
+                  </button>
+                ))}
+              </div>
+              {/* Mismas tarjetas de plato que el comandero del mozo */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3 max-h-[560px] overflow-y-auto pr-1">
+                {cargandoPlatos && (
+                  <p className="text-sm text-on-surface-variant">Cargando carta…</p>
+                )}
+                {!cargandoPlatos && platosVisibles.length === 0 && (
+                  <p className="col-span-full text-sm text-on-surface-variant">
+                    No hay platos disponibles con ese criterio.
+                  </p>
+                )}
+                {platosVisibles.map((p) => {
+                  // Suma todas las líneas del plato (puede haber varias con modificadores distintos)
+                  const cantidadEnPedido = lineas
+                    .filter((l) => l.plato.id === p.id)
+                    .reduce((acc, l) => acc + l.cantidad, 0);
+                  return (
+                    <div
+                      key={p.id}
+                      data-plato={p.id}
+                      className="bg-surface-container-lowest border border-surface-container-high rounded-xl p-3.5 flex flex-col justify-between shadow-xs hover:border-primary/50 hover:shadow-md transition-all text-left relative overflow-hidden group"
+                    >
+                      {cantidadEnPedido > 0 && (
+                        <span className="absolute top-2 right-2 bg-primary text-on-primary text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
+                          {cantidadEnPedido}
+                        </span>
+                      )}
+
+                      <div>
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                          <span>{p.estacionNombre || 'Cocina'}</span>
+                        </div>
+                        <h2 className="font-bold text-sm text-on-surface line-clamp-2 leading-snug group-hover:text-primary transition-colors">
+                          {p.nombre}
+                        </h2>
+                      </div>
+
+                      <div className="mt-3 pt-2.5 border-t border-surface-container-low flex items-center justify-between">
+                        <div>
+                          <span className="text-xs font-extrabold text-on-surface">
+                            S/ {Number(p.precio).toFixed(2)}
+                          </span>
+                          <div className="flex items-center gap-0.5 text-[10px] font-medium text-on-surface-variant">
+                            <span className="material-symbols-outlined text-[12px]">timer</span>
+                            <span>{p.tiempoEstandarMinutos}m</span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          data-plato-agregar={p.id}
+                          onClick={() => agregarPlato(p)}
+                          className="w-8 h-8 rounded-lg bg-surface-container-high hover:bg-primary hover:text-on-primary text-on-surface flex items-center justify-center transition-colors shadow-xs active:scale-90"
+                          title="Agregar al pedido"
+                          aria-label={`Agregar ${p.nombre}`}
+                        >
+                          <span className="material-symbols-outlined text-[18px]">add</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          {/* Resumen del pedido y envío */}
+          <aside className="bg-surface-container-lowest border border-surface-container-high rounded-2xl p-4 flex flex-col gap-3 h-fit lg:sticky lg:top-20">
+            <h3 className="font-headline font-bold text-lg">
+              Pedido {canal ? `· ${canal.nombre}` : ''}
+            </h3>
+
+            {lineas.length === 0 ? (
+              <p className="text-sm text-on-surface-variant">Todavía no hay platos.</p>
+            ) : (
+              <ul className="flex flex-col gap-2.5">
+                {lineas.map((l) => (
+                  <li
+                    key={l.id}
+                    data-linea-externa={l.plato.id}
+                    className="border rounded-xl p-3 flex flex-col gap-2 shadow-2xs bg-surface-container-low/70 border-surface-container-high"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-left flex-1">
+                        <p className="text-xs font-bold text-on-surface leading-tight">
+                          {l.plato.nombre}
+                        </p>
+                        <span className="text-[10px] text-on-surface-variant font-medium">
+                          S/ {Number(l.plato.precio).toFixed(2)} c/u •{' '}
+                          {l.plato.tiempoEstandarMinutos} min
+                        </span>
+                      </div>
+                      <span className="text-xs font-extrabold text-on-surface font-mono">
+                        S/ {(Number(l.plato.precio) * l.cantidad).toFixed(2)}
                       </span>
+                    </div>
+
+                    {/* Modificadores del plato; sin ellos solo se indica la cantidad (HU008) */}
+                    {l.plato.modificadores.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {l.plato.modificadores.map((m) => {
+                          const activo = l.modificadores.split(', ').includes(m);
+                          return (
+                            <button
+                              key={m}
+                              type="button"
+                              aria-pressed={activo}
+                              onClick={() => alternarModificador(l.id, m)}
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
+                                activo
+                                  ? 'bg-primary text-on-primary border-primary'
+                                  : 'bg-surface-container-lowest text-on-surface-variant border-surface-container-high hover:border-primary/50'
+                              }`}
+                            >
+                              {m}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] font-medium text-outline">
+                        Este plato no tiene modificadores: solo indique la cantidad.
+                      </p>
                     )}
 
-                    <div>
-                      <div className="flex items-center gap-1.5 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                        <span>{p.estacionNombre || 'Cocina'}</span>
-                      </div>
-                      <h2 className="font-bold text-sm text-on-surface line-clamp-2 leading-snug group-hover:text-primary transition-colors">
-                        {p.nombre}
-                      </h2>
-                    </div>
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        type="button"
+                        aria-label={`Quitar ${l.plato.nombre}`}
+                        onClick={() => quitarLinea(l.id)}
+                        className="text-on-surface-variant hover:text-error p-1"
+                        title="Quitar plato"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                      </button>
 
-                    <div className="mt-3 pt-2.5 border-t border-surface-container-low flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-extrabold text-on-surface">
-                          S/ {Number(p.precio).toFixed(2)}
+                      <div className="flex items-center gap-2 bg-surface-container-lowest rounded-lg border border-surface-container-high px-2 py-0.5">
+                        <button
+                          type="button"
+                          aria-label="Menos"
+                          onClick={() => cambiarCantidad(l.id, -1)}
+                          className="w-6 h-6 flex items-center justify-center text-on-surface hover:bg-surface-container rounded"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">remove</span>
+                        </button>
+                        <span className="font-mono text-xs font-bold w-4 text-center">
+                          {l.cantidad}
                         </span>
-                        <div className="flex items-center gap-0.5 text-[10px] font-medium text-on-surface-variant">
-                          <span className="material-symbols-outlined text-[12px]">timer</span>
-                          <span>{p.tiempoEstandarMinutos}m</span>
-                        </div>
+                        <button
+                          type="button"
+                          aria-label="Más"
+                          onClick={() => cambiarCantidad(l.id, 1)}
+                          disabled={l.cantidad >= CANTIDAD_MAXIMA}
+                          className="w-6 h-6 flex items-center justify-center text-on-surface hover:bg-surface-container rounded disabled:opacity-40"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">add</span>
+                        </button>
                       </div>
-
-                      <button
-                        type="button"
-                        data-plato-agregar={p.id}
-                        onClick={() => agregarPlato(p)}
-                        className="w-8 h-8 rounded-lg bg-surface-container-high hover:bg-primary hover:text-on-primary text-on-surface flex items-center justify-center transition-colors shadow-xs active:scale-90"
-                        title="Agregar al pedido"
-                        aria-label={`Agregar ${p.nombre}`}
-                      >
-                        <span className="material-symbols-outlined text-[18px]">add</span>
-                      </button>
                     </div>
-                  </div>
-                );
-              })}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div>
+              <label
+                htmlFor="externo-observaciones"
+                className="block text-xs font-bold uppercase mb-1"
+              >
+                Observaciones (opcional)
+              </label>
+              <input
+                id="externo-observaciones"
+                type="text"
+                className={campo}
+                maxLength={500}
+                value={observaciones}
+                onChange={(e) => setObservaciones(e.target.value)}
+              />
             </div>
-          </div>
-        </section>
 
-        {/* Resumen del pedido y envío */}
-        <aside className="bg-surface-container-lowest border border-surface-container-high rounded-2xl p-4 flex flex-col gap-3 h-fit lg:sticky lg:top-20">
-          <h3 className="font-headline font-bold text-lg">
-            Pedido {canal ? `· ${canal.nombre}` : ''}
-          </h3>
+            {errores.length > 0 && (
+              <ul
+                data-errores-externo
+                className="text-xs text-on-surface-variant flex flex-col gap-0.5"
+              >
+                {errores.map((e) => (
+                  <li key={e}>• {e}</li>
+                ))}
+              </ul>
+            )}
 
-          {lineas.length === 0 ? (
-            <p className="text-sm text-on-surface-variant">Todavía no hay platos.</p>
-          ) : (
-            <ul className="flex flex-col gap-2.5">
-              {lineas.map((l) => (
-                <li
-                  key={l.id}
-                  data-linea-externa={l.plato.id}
-                  className="border rounded-xl p-3 flex flex-col gap-2 shadow-2xs bg-surface-container-low/70 border-surface-container-high"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-left flex-1">
-                      <p className="text-xs font-bold text-on-surface leading-tight">{l.plato.nombre}</p>
-                      <span className="text-[10px] text-on-surface-variant font-medium">
-                        S/ {Number(l.plato.precio).toFixed(2)} c/u • {l.plato.tiempoEstandarMinutos} min
-                      </span>
-                    </div>
-                    <span className="text-xs font-extrabold text-on-surface font-mono">
-                      S/ {(Number(l.plato.precio) * l.cantidad).toFixed(2)}
-                    </span>
-                  </div>
-
-                  {/* Modificadores del plato; sin ellos solo se indica la cantidad (HU008) */}
-                  {l.plato.modificadores.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
-                      {l.plato.modificadores.map((m) => {
-                        const activo = l.modificadores.split(', ').includes(m);
-                        return (
-                          <button
-                            key={m}
-                            type="button"
-                            aria-pressed={activo}
-                            onClick={() => alternarModificador(l.id, m)}
-                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
-                              activo
-                                ? 'bg-primary text-on-primary border-primary'
-                                : 'bg-surface-container-lowest text-on-surface-variant border-surface-container-high hover:border-primary/50'
-                            }`}
-                          >
-                            {m}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-[10px] font-medium text-outline">
-                      Este plato no tiene modificadores: solo indique la cantidad.
-                    </p>
-                  )}
-
-                  <div className="flex items-center justify-between pt-1">
-                    <button
-                      type="button"
-                      aria-label={`Quitar ${l.plato.nombre}`}
-                      onClick={() => quitarLinea(l.id)}
-                      className="text-on-surface-variant hover:text-error p-1"
-                      title="Quitar plato"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">delete</span>
-                    </button>
-
-                    <div className="flex items-center gap-2 bg-surface-container-lowest rounded-lg border border-surface-container-high px-2 py-0.5">
-                      <button
-                        type="button"
-                        aria-label="Menos"
-                        onClick={() => cambiarCantidad(l.id, -1)}
-                        className="w-6 h-6 flex items-center justify-center text-on-surface hover:bg-surface-container rounded"
-                      >
-                        <span className="material-symbols-outlined text-[14px]">remove</span>
-                      </button>
-                      <span className="font-mono text-xs font-bold w-4 text-center">{l.cantidad}</span>
-                      <button
-                        type="button"
-                        aria-label="Más"
-                        onClick={() => cambiarCantidad(l.id, 1)}
-                        disabled={l.cantidad >= CANTIDAD_MAXIMA}
-                        className="w-6 h-6 flex items-center justify-center text-on-surface hover:bg-surface-container rounded disabled:opacity-40"
-                      >
-                        <span className="material-symbols-outlined text-[14px]">add</span>
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div>
-            <label htmlFor="externo-observaciones" className="block text-xs font-bold uppercase mb-1">
-              Observaciones (opcional)
-            </label>
-            <input
-              id="externo-observaciones"
-              type="text"
-              className={campo}
-              maxLength={500}
-              value={observaciones}
-              onChange={(e) => setObservaciones(e.target.value)}
-            />
-          </div>
-
-          {errores.length > 0 && (
-            <ul data-errores-externo className="text-xs text-on-surface-variant flex flex-col gap-0.5">
-              {errores.map((e) => (
-                <li key={e}>• {e}</li>
-              ))}
-            </ul>
-          )}
-
-          <button
-            type="button"
-            data-enviar-externo
-            onClick={enviar}
-            disabled={errores.length > 0 || celularInvalido || enviando}
-            className="min-h-[52px] rounded-xl bg-primary text-on-primary font-bold disabled:opacity-50"
-          >
-            {enviando ? 'ENVIANDO…' : 'ENVIAR A COCINA'}
-          </button>
-        </aside>
-      </main>
+            <button
+              type="button"
+              data-enviar-externo
+              onClick={enviar}
+              disabled={errores.length > 0 || celularInvalido || enviando}
+              className="min-h-[52px] rounded-xl bg-primary text-on-primary font-bold disabled:opacity-50"
+            >
+              {enviando ? 'ENVIANDO…' : 'ENVIAR A COCINA'}
+            </button>
+          </aside>
+        </main>
       ) : (
         <main data-recientes className="flex-1 max-w-3xl w-full mx-auto p-4 lg:p-6">
           <div className="bg-surface-container-lowest border border-surface-container-high rounded-2xl p-4">
-            <h3 className="font-headline font-bold text-lg">Pedidos externos de las últimas 24 horas</h3>
+            <h3 className="font-headline font-bold text-lg">
+              Pedidos externos de las últimas 24 horas
+            </h3>
             <p className="text-xs text-on-surface-variant mt-1">
               Pulse "Anular" en un ítem para retirarlo del pedido.
             </p>

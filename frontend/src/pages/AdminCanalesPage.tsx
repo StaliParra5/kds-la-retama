@@ -53,7 +53,15 @@ export const AdminCanalesPage: React.FC = () => {
 
   // HU037/HU025: SLA y umbral ámbar se guardan juntos
   const actualizarTiemposMutation = useMutation({
-    mutationFn: async ({ canalId, sla, umbral }: { canalId: number; sla: number; umbral: number }) =>
+    mutationFn: async ({
+      canalId,
+      sla,
+      umbral,
+    }: {
+      canalId: number;
+      sla: number;
+      umbral: number;
+    }) =>
       (
         await apiClient.put(`/canales/${canalId}/sla`, {
           slaObjetivoMinutos: sla,
@@ -68,19 +76,28 @@ export const AdminCanalesPage: React.FC = () => {
         'success',
       );
     },
-    onError: (err: any) => showToast(errorDe(err, 'Error al actualizar los tiempos del canal.'), 'error'),
+    onError: (err: any) =>
+      showToast(errorDe(err, 'Error al actualizar los tiempos del canal.'), 'error'),
   });
 
   // HU015: color e ícono
   const actualizarAparienciaMutation = useMutation({
-    mutationFn: async ({ canalId, color, icono }: { canalId: number; color: string; icono: string }) =>
-      (await apiClient.put(`/canales/${canalId}/apariencia`, { color, icono })).data,
+    mutationFn: async ({
+      canalId,
+      color,
+      icono,
+    }: {
+      canalId: number;
+      color: string;
+      icono: string;
+    }) => (await apiClient.put(`/canales/${canalId}/apariencia`, { color, icono })).data,
     onSuccess: (canal: CanalVenta) => {
       queryClient.invalidateQueries({ queryKey: ['canales'] });
       setApariencias((prev) => ({ ...prev, [canal.id]: {} }));
       showToast(`Apariencia de ${canal.nombre} actualizada.`, 'success');
     },
-    onError: (err: any) => showToast(errorDe(err, 'Error al actualizar la apariencia del canal.'), 'error'),
+    onError: (err: any) =>
+      showToast(errorDe(err, 'Error al actualizar la apariencia del canal.'), 'error'),
   });
 
   // Mutación para activar / desactivar canal (HU010)
@@ -97,7 +114,8 @@ export const AdminCanalesPage: React.FC = () => {
         canalActualizado.activo ? 'success' : 'info',
       );
     },
-    onError: (err: any) => showToast(errorDe(err, 'Error al cambiar el estado del canal.'), 'error'),
+    onError: (err: any) =>
+      showToast(errorDe(err, 'Error al cambiar el estado del canal.'), 'error'),
   });
 
   const editarTiempos = (canalId: number, campo: keyof EdicionTiempos, valor: string) => {
@@ -170,7 +188,12 @@ export const AdminCanalesPage: React.FC = () => {
                   }`}
                 >
                   {/* Vista previa de la franja tal como se verá en la tarjeta */}
-                  <CanalFranja codigo={canal.codigo} nombre={canal.nombre} color={color} icono={icono} />
+                  <CanalFranja
+                    codigo={canal.codigo}
+                    nombre={canal.nombre}
+                    color={color}
+                    icono={icono}
+                  />
 
                   <div className="p-6 flex flex-col gap-5">
                     <div className="flex items-center justify-between">
@@ -192,7 +215,10 @@ export const AdminCanalesPage: React.FC = () => {
                           aria-checked={canal.activo}
                           aria-label={`${canal.activo ? 'Desactivar' : 'Activar'} canal ${canal.nombre}`}
                           onClick={() =>
-                            cambiarEstadoMutation.mutate({ canalId: canal.id, activo: !canal.activo })
+                            cambiarEstadoMutation.mutate({
+                              canalId: canal.id,
+                              activo: !canal.activo,
+                            })
                           }
                           disabled={cambiarEstadoMutation.isPending}
                           className={`relative w-10 h-5 rounded-full transition-colors disabled:opacity-50 cursor-pointer ${
@@ -218,71 +244,76 @@ export const AdminCanalesPage: React.FC = () => {
                           Tiempos y semáforo
                         </h2>
                         <p className="text-xs text-on-surface-variant">
-                          Los tiempos de Salón se configuran en la pestaña Salón y se aplican a las mesas y a
-                          las tarjetas de salón en cocina y pase. Hoy: ámbar desde{' '}
-                          {canal.umbralAmbarMinutos ?? '—'} min y rojo desde {canal.slaObjetivoMinutos} min.
+                          Los tiempos de Salón se configuran en la pestaña Salón y se aplican a las
+                          mesas y a las tarjetas de salón en cocina y pase. Hoy: ámbar desde{' '}
+                          {canal.umbralAmbarMinutos ?? '—'} min y rojo desde{' '}
+                          {canal.slaObjetivoMinutos} min.
                         </p>
                         <Link
                           to="/admin/salon"
                           className="self-end px-4 py-2 rounded-xl border border-surface-container-high text-xs font-bold hover:border-primary/50 flex items-center gap-1.5"
                         >
-                          <span className="material-symbols-outlined text-[16px]">table_restaurant</span>
+                          <span className="material-symbols-outlined text-[16px]">
+                            table_restaurant
+                          </span>
                           Ir a Salón
                         </Link>
                       </section>
                     ) : (
-                    <section className="bg-surface-container-low p-4 rounded-xl border border-surface-container-high flex flex-col gap-3">
-                      <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-                        Tiempos y semáforo
-                      </h2>
-                      <div className="flex flex-wrap gap-4">
-                        <label className="flex flex-col gap-1 text-[11px] font-bold text-on-surface-variant">
-                          SLA (minutos)
-                          <input
-                            id={`sla-input-${canal.id}`}
-                            type="number"
-                            min="1"
-                            max="180"
-                            value={sla}
-                            onChange={(e) => editarTiempos(canal.id, 'sla', e.target.value)}
-                            className={campoNumero}
-                          />
-                        </label>
-                        <label className="flex flex-col gap-1 text-[11px] font-bold text-on-surface-variant">
-                          Ámbar desde (% del SLA)
-                          <input
-                            id={`umbral-input-${canal.id}`}
-                            type="number"
-                            min="1"
-                            max="99"
-                            value={umbral}
-                            onChange={(e) => editarTiempos(canal.id, 'umbral', e.target.value)}
-                            className={campoNumero}
-                          />
-                        </label>
-                      </div>
-                      <p className="text-[11px] text-on-surface-variant">
-                        Verde hasta {Math.round((sla * umbral) / 100)} min, ámbar hasta {sla} min y rojo
-                        desde {sla} min.
-                      </p>
-                      {problemaTiempos && (
-                        <p className="text-[11px] font-semibold text-error">{problemaTiempos}</p>
-                      )}
-                      <button
-                        type="button"
-                        data-guardar-tiempos={canal.codigo}
-                        onClick={() =>
-                          actualizarTiemposMutation.mutate({ canalId: canal.id, sla, umbral })
-                        }
-                        disabled={
-                          !tiemposModificados || !!problemaTiempos || actualizarTiemposMutation.isPending
-                        }
-                        className="self-end px-4 py-2 bg-primary text-on-primary rounded-xl text-xs font-bold disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">save</span>
-                        Guardar tiempos
-                      </button>
-                    </section>
+                      <section className="bg-surface-container-low p-4 rounded-xl border border-surface-container-high flex flex-col gap-3">
+                        <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                          Tiempos y semáforo
+                        </h2>
+                        <div className="flex flex-wrap gap-4">
+                          <label className="flex flex-col gap-1 text-[11px] font-bold text-on-surface-variant">
+                            SLA (minutos)
+                            <input
+                              id={`sla-input-${canal.id}`}
+                              type="number"
+                              min="1"
+                              max="180"
+                              value={sla}
+                              onChange={(e) => editarTiempos(canal.id, 'sla', e.target.value)}
+                              className={campoNumero}
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1 text-[11px] font-bold text-on-surface-variant">
+                            Ámbar desde (% del SLA)
+                            <input
+                              id={`umbral-input-${canal.id}`}
+                              type="number"
+                              min="1"
+                              max="99"
+                              value={umbral}
+                              onChange={(e) => editarTiempos(canal.id, 'umbral', e.target.value)}
+                              className={campoNumero}
+                            />
+                          </label>
+                        </div>
+                        <p className="text-[11px] text-on-surface-variant">
+                          Verde hasta {Math.round((sla * umbral) / 100)} min, ámbar hasta {sla} min
+                          y rojo desde {sla} min.
+                        </p>
+                        {problemaTiempos && (
+                          <p className="text-[11px] font-semibold text-error">{problemaTiempos}</p>
+                        )}
+                        <button
+                          type="button"
+                          data-guardar-tiempos={canal.codigo}
+                          onClick={() =>
+                            actualizarTiemposMutation.mutate({ canalId: canal.id, sla, umbral })
+                          }
+                          disabled={
+                            !tiemposModificados ||
+                            !!problemaTiempos ||
+                            actualizarTiemposMutation.isPending
+                          }
+                          className="self-end px-4 py-2 bg-primary text-on-primary rounded-xl text-xs font-bold disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">save</span>
+                          Guardar tiempos
+                        </button>
+                      </section>
                     )}
 
                     {/* HU015: color e ícono */}
@@ -304,7 +335,9 @@ export const AdminCanalesPage: React.FC = () => {
                           value={color}
                           maxLength={7}
                           onChange={(e) =>
-                            editarApariencia(canal.id, { color: e.target.value.trim().toLowerCase() })
+                            editarApariencia(canal.id, {
+                              color: e.target.value.trim().toLowerCase(),
+                            })
                           }
                           className="w-28 bg-surface-container-lowest font-mono text-sm px-3 py-2 rounded-lg border border-surface-container-high focus:outline-none focus:ring-2 focus:ring-primary"
                         />
@@ -315,7 +348,9 @@ export const AdminCanalesPage: React.FC = () => {
                         </p>
                       )}
                       <fieldset className="flex flex-wrap gap-2">
-                        <legend className="text-[11px] font-bold text-on-surface-variant mb-1">Ícono</legend>
+                        <legend className="text-[11px] font-bold text-on-surface-variant mb-1">
+                          Ícono
+                        </legend>
                         {ICONOS_CANAL.map((opcion) => (
                           <button
                             key={opcion.nombre}
@@ -329,7 +364,9 @@ export const AdminCanalesPage: React.FC = () => {
                                 : 'border-surface-container-high hover:border-primary/50'
                             }`}
                           >
-                            <span className="material-symbols-outlined text-[22px]">{opcion.nombre}</span>
+                            <span className="material-symbols-outlined text-[22px]">
+                              {opcion.nombre}
+                            </span>
                           </button>
                         ))}
                       </fieldset>

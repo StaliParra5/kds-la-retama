@@ -31,7 +31,10 @@ export const VentanaRecallConfig: FC = () => {
       setValor(null);
       showToast(`Ventana para deshacer: ${segundos} segundos.`, 'success');
     } catch (err: any) {
-      showToast(err.response?.data?.mensaje ?? 'No se pudo guardar la ventana para deshacer.', 'error');
+      showToast(
+        err.response?.data?.mensaje ?? 'No se pudo guardar la ventana para deshacer.',
+        'error',
+      );
     } finally {
       setGuardando(false);
     }
@@ -71,7 +74,11 @@ export const VentanaRecallConfig: FC = () => {
       >
         Guardar
       </button>
-      {!valido && <p className="w-full text-xs font-semibold text-error">Debe estar entre 5 y 120 segundos.</p>}
+      {!valido && (
+        <p className="w-full text-xs font-semibold text-error">
+          Debe estar entre 5 y 120 segundos.
+        </p>
+      )}
     </section>
   );
 };

@@ -197,5 +197,7 @@ export const formatoCronometro = (milisegundos: number): string => {
   const minutos = Math.floor((total % 3600) / 60);
   const segundos = total % 60;
   const dos = (n: number) => String(n).padStart(2, '0');
-  return horas > 0 ? `${horas}:${dos(minutos)}:${dos(segundos)}` : `${dos(minutos)}:${dos(segundos)}`;
+  return horas > 0
+    ? `${horas}:${dos(minutos)}:${dos(segundos)}`
+    : `${dos(minutos)}:${dos(segundos)}`;
 };

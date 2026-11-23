@@ -116,7 +116,8 @@ export const AnularItemDialog: FC<{
   const { data: motivos = [] } = useQuery<MotivoAnulacion[]>({
     queryKey: ['motivos-anulacion', item.estadoItem],
     queryFn: async () =>
-      (await apiClient.get('/items/motivos-anulacion', { params: { estado: item.estadoItem } })).data,
+      (await apiClient.get('/items/motivos-anulacion', { params: { estado: item.estadoItem } }))
+        .data,
     staleTime: Number.POSITIVE_INFINITY,
   });
 
@@ -144,7 +145,10 @@ export const AnularItemDialog: FC<{
       if (!respuesta) {
         // Sin respuesta del servidor: se mantiene el diálogo para reintentar sin perder el motivo elegido
         showToast('No se pudo anular el ítem. Revise la conexión e intente de nuevo.', 'error');
-      } else if (respuesta.status === 403 && String(respuesta.data?.codigo ?? '').startsWith('AUTORIZACION_ADMIN')) {
+      } else if (
+        respuesta.status === 403 &&
+        String(respuesta.data?.codigo ?? '').startsWith('AUTORIZACION_ADMIN')
+      ) {
         // D36: clave incorrecta o bloqueada; el diálogo sigue abierto y la clave se borra para reintentar
         setAdminClave('');
         showToast(

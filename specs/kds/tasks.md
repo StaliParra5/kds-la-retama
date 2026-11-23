@@ -421,18 +421,23 @@
   - Frontend: `components/cocina/CanalFranja.tsx` (franja con color, ícono y nombre; comentario del logo de Rappi), usada en `CocinaPage` y `PasePage`; `utils/canal.ts` (lista provisional de íconos y las mismas reglas de color); `AdminCanalesPage` con color, ícono y vista previa.
   - Pruebas: `ColorCanalTest`, `CanalServiceTest`, `ItemCocinaMapperTest`; smoke `smoke_hu015.cjs`.
 
-- [ ] **TASK-079 [FULL] [F2] Semáforo por SLA (HU025, D38)** — implementado, pendiente de verificar build, pruebas y flujo en vivo
+- [x] **TASK-079 [FULL] [F2] Semáforo por SLA (HU025, D38)** — verificada: build en verde, `smoke_hu025.cjs` en OK y prueba manual
   - Backend: umbral ámbar por canal en `PUT /api/v1/canales/{id}/sla` (1 a 99 %); `NotificadorKds.CanalKdsEvent` publica `/topic/canales` ante cualquier cambio de canal (permitido a todos en `PermisosSuscripcion`).
   - Frontend: `nivelSemaforo` y `claseSemaforo` con umbral (`utils/cocina.ts`); `components/cocina/TarjetaSemaforo.tsx` (borde de la tarjeta con el semáforo, revisado cada segundo con la hora del servidor); `Cronometro` con umbral; `CocinaPage` y `PasePage` escuchan `/topic/canales`; `AdminCanalesPage` edita el umbral.
   - Pruebas: `CanalServiceTest`, `PermisosSuscripcionTest`; smoke `smoke_hu025.cjs` (dura poco más de 1 minuto).
   - Ajuste D39 (2026-11-18): un solo semáforo para Salón. Migración `V24__salon_semaforo_unico.sql` (`canales_venta.umbral_ambar_minutos`, Salón toma los minutos de `configuracion_semaforo`); `SalonService.actualizarSemaforo` copia los minutos al canal Salón y avisa; `CanalService` rechaza cambiar el SLA de Salón; `ItemCocinaDto.canalAmbarMinutos` (minuto ámbar resuelto en el servidor); `AdminCanalesPage` muestra un aviso con enlace a Salón. Pruebas: `SalonServiceTest`, `CanalServiceTest`, `ItemCocinaMapperTest` y el caso de Salón en `smoke_hu025.cjs`.
 
-- [ ] **TASK-080 [FULL] [F2] Deshacer el último cambio de estado (HU033, D41)** — implementado, pendiente de verificar build, pruebas y flujo en vivo
+- [x] **TASK-080 [FULL] [F2] Deshacer el último cambio de estado (HU033, D41)** — verificada: build en verde, `smoke_hu033.cjs` en OK y prueba manual
   - Backend: migración `V25__recall.sql` (`configuracion_cocina.ventana_recall_segundos` y `detalles_pedido.estado_previo` / `ultimo_cambio_en`); `ConfiguracionCocina`, `ConfiguracionCocinaRepository`, `ConfiguracionCocinaService` y `ConfiguracionCocinaController` (`GET/PUT /api/v1/configuracion/cocina`); `CicloVidaItemService.deshacerCambio` y `POST /api/v1/items/{id}/recall` (`DeshacerCambioRequest`); códigos `RECALL_NO_DISPONIBLE` y `RECALL_VENCIDO`; `ItemCocinaDto.estadoPrevio` y `ultimoCambioEpochMs`.
   - Frontend: `components/cocina/BotonDeshacer.tsx` (tiempo restante debajo del botón), `CocinaPage` (deshacer y ítem Listo visible toda la ventana), `components/cocina/VentanaRecallConfig.tsx` en `AdminEstacionesPage`.
   - Pruebas: `CicloVidaItemServiceTest`, `ConfiguracionCocinaServiceTest`; smoke `smoke_hu033.cjs`.
 
-- [ ] **TASK-081 [FULL] [F2] Indicador de conexión y reconexión automática (HU038, D42)** — implementado, pendiente de verificar build, pruebas y flujo en vivo
+- [x] **TASK-081 [FULL] [F2] Indicador de conexión y reconexión automática (HU038, D42)** — verificada: build en verde, `smoke_hu038.cjs` en OK y prueba manual
   - Backend: `WebSocketConfig` con latidos STOMP cada 1,5 s (planificador propio del broker simple).
   - Frontend: `api/tiempoReal.ts` (latidos 1,5 s, cierre inmediato ante falla, evento `offline`, reintento cada 3 s); `components/common/IndicadorConexion.tsx` (insignia "En vivo / Sin conexión con el servidor / Conectado", reemplaza la anterior de estación y pase y se agrega al comandero); `CocinaPage` bloquea iniciar, listo y deshacer sin conexión.
   - Pruebas: smoke `smoke_hu038.cjs` (modo sin conexión de Chrome en las tres vistas).
+
+- [x] **TASK-082 [FULL] [F2] Operar sin internet (HU018, D43)** — verificada: build en verde, `smoke_hu018.cjs` en OK, F12 sin recursos externos, operación con el internet de la PC apagado y caída de internet simulada con `KDS_INTERNET_URL` con un celular por IP
+  - Frontend: fuentes e íconos locales en `main.tsx` (`@fontsource/inter`, `@fontsource/plus-jakarta-sans`, `material-symbols`); `index.html` sin enlaces a Google; `components/common/IndicadorInternet.tsx` ("Sin internet") en `CocinaPage` y `PasePage`, y aviso en `PedidoExternoPage`; las tres escuchan `/topic/sistema`.
+  - Backend: `EstadoInternetService` (comprobación cada 10 s, caída tras 2 fallas), `SistemaController` (`GET /api/v1/sistema/estado`), `ProgramacionConfig` (`@EnableScheduling`), `EstadoSistemaDto`, `/topic/sistema` en `PermisosSuscripcion`, propiedades `kds.internet.*` en `application.yml`.
+  - Pruebas: `EstadoInternetServiceTest`, `PermisosSuscripcionTest`; smoke `smoke_hu018.cjs` (bloquea en Chrome todo lo externo y reinicia el contenedor del servidor).

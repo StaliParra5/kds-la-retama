@@ -416,7 +416,8 @@ export const AdminSalonPage: React.FC = () => {
             <div>
               <h2 className="font-headline font-bold text-lg">Semáforo de mesas</h2>
               <p className="text-xs text-on-surface-variant">
-                Minutos de espera desde el envío a cocina del pedido pendiente más antiguo. También rigen el color de las tarjetas de salón en cocina y pase.
+                Minutos de espera desde el envío a cocina del pedido pendiente más antiguo. También
+                rigen el color de las tarjetas de salón en cocina y pase.
               </p>
             </div>
             {errorSemaforo && (

@@ -53,6 +53,9 @@ services:
       # HU019: clave del punto de integración de pedidos externos. El valor por defecto es solo para el entorno local:
       # en el restaurante se define con la variable de entorno KDS_INTEGRACION_API_KEY
       KDS_INTEGRACION_API_KEY: ${KDS_INTEGRACION_API_KEY:-kds-integracion-local-2026}
+      # HU018: dirección con la que el servidor comprueba su salida a internet (responde vacío). Para simular la caída
+      # de internet en una prueba, se apunta a una dirección que no responde (ver README de scripts/e2e)
+      KDS_INTERNET_URL: ${KDS_INTERNET_URL:-http://connectivitycheck.gstatic.com/generate_204}
     networks:
       - kds-network
 

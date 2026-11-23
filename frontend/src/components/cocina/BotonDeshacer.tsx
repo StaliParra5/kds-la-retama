@@ -35,7 +35,10 @@ export const BotonDeshacer: FC<{
         <span className="material-symbols-outlined text-[16px]">undo</span>
         Deshacer
       </button>
-      <span data-deshacer-segundos className="text-[10px] font-semibold text-on-surface-variant tabular-nums">
+      <span
+        data-deshacer-segundos
+        className="text-[10px] font-semibold text-on-surface-variant tabular-nums"
+      >
         {segundos} s
       </span>
     </div>
